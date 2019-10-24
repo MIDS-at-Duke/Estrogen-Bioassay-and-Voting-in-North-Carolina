@@ -87,14 +87,74 @@ ggplot(dt,aes(x=County, y=NbrOfObs),label=NbrOfObs)+
 ######## EDA ######## 
 
 #colnames(voter_dataset)
-# "county_desc" | "precinct_abbrv" | "vtd_abbrv" | "party_cd" | "race_code" |
-# "sex_code" | "age" | "voting_method" | "voted_party_cd" | "voted_voters" 
-# "voting_method_desc" | "total_voters" |  "ethnic_code"   
+# county_desc   | 
+# precinct_abbrv| vtd_abbrv | 
+# race_code     | sex_code  | age | ethnic_code
+# total_voters  |  party_cd  
+# voting_method | voting_method_desc | voted_voters | voted_party_cd
+
 
 str(voter_dataset)
 voter_dataset$total_voters = as.numeric(voter_dataset$total_voters)
 voter_dataset$voted_voters = as.numeric(voter_dataset$voted_voters)
 
+
+#Checking the counts of total voters against voted voters 
+
+nrow(voter_dataset[voter_dataset$voted_voters > voter_dataset$total_voters,  ])  # 20486
+nrow(voter_dataset[voter_dataset$voted_voters == voter_dataset$total_voters,  ]) # 15871
+nrow(voter_dataset[voter_dataset$voted_voters < voter_dataset$total_voters,  ])  # 63022
+
+# Removing unwatned factor levels
+voter_dataset$voting_method = as.character(voter_dataset$voting_method)
+voter_dataset$voting_method = as.factor(voter_dataset$voting_method)
+
+voter_dataset$voting_method_desc = as.character(voter_dataset$voting_method_desc)
+voter_dataset$voting_method_desc = as.factor(voter_dataset$voting_method_desc)
+
+#unique(voter_dataset[,c("voting_method","voting_method_desc")])
+
+#dropping voting_method
+voter_dataset$voting_method <- NULL
+
+#Age
+voter_dataset$age = as.character(voter_dataset$age)
+voter_dataset$age = as.factor(voter_dataset$age)
+
+#Age
+voter_dataset$sex_code = as.character(voter_dataset$sex_code)
+voter_dataset$sex_code = as.factor(voter_dataset$sex_code)
+
+#Precient abbreviation
+voter_dataset$precinct_abbrv = as.character(voter_dataset$precinct_abbrv)
+voter_dataset$precinct_abbrv = as.factor(voter_dataset$precinct_abbrv)
+
+#Precient abbreviation (National Level)
+voter_dataset$vtd_abbrv = as.character(voter_dataset$vtd_abbrv)
+voter_dataset$vtd_abbrv = as.factor(voter_dataset$vtd_abbrv)
+
+#Race code
+voter_dataset$race_code = as.character(voter_dataset$race_code)
+voter_dataset$race_code = as.factor(voter_dataset$race_code)
+
+#Ethinic Code
+voter_dataset$ethnic_code = as.character(voter_dataset$ethnic_code)
+voter_dataset$ethnic_code = as.factor(voter_dataset$ethnic_code)
+
+#Voted Party Code
+voter_dataset$voted_party_cd = as.character(voter_dataset$voted_party_cd)
+voter_dataset$voted_party_cd = as.factor(voter_dataset$voted_party_cd)
+
+#Voted Party Code
+voter_dataset$party_cd = as.character(voter_dataset$party_cd)
+voter_dataset$party_cd = as.factor(voter_dataset$party_cd)
+
+#Checking number of people who changed party
+aggregate( voter_dataset$party_cd, list(voter_dataset$party_cd,voter_dataset$voted_party_cd),length)
+
+# Plotting EDA
+
+#plotting distribution of total voter obeservations for each county
 ggplot(voter_dataset, aes(x=county_desc, y=total_voters))+
   geom_boxplot(aes(fill= county_desc),width=0.2)+
   ggtitle("Distribution of Total Voters for 20 Counties") +
@@ -105,6 +165,7 @@ ggplot(voter_dataset, aes(x=county_desc, y=total_voters))+
         axis.text.x = element_text(angle = 45,hjust = 1))
 
 
+#plotting distribution of voted voter obeservations for each county
 ggplot(voter_dataset, aes(x=county_desc, y=voted_voters))+
   geom_boxplot(aes(fill= county_desc),width=0.2)+
   ggtitle("Distribution of Voted Voters for 20 Counties") +
@@ -115,7 +176,78 @@ ggplot(voter_dataset, aes(x=county_desc, y=voted_voters))+
         axis.text.x = element_text(angle = 45,hjust = 1))
 
 
+#Calculating total and voted voters per county along with %voted
+dt = aggregate(c(voter_dataset$total_voters), list(voter_dataset$county_desc), sum)
+colnames(dt) = c('County','NbrOfTotalVoters')
+dt2 = aggregate(c(voter_dataset$voted_voters), list(voter_dataset$county_desc), sum)
+colnames(dt2) = c('County','NbrOfVotedVoters')
+dt3 = merge(dt, dt2, by = "County")
+dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
+
+## plotting number of total voters and count of voters who voted
+ggplot(dt3, aes(x=County))+
+  geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2')+
+  geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2')+
+  ggtitle("Distribution of Total Voter and Voted voters for 20 Counties") +
+  geom_text(data=dt3,aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
+            vjust = -0.5, angle=0) +
+  xlab("Counties")+
+  ylab("Voter Count") +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45,hjust = 1))
+
+levels(voter_dataset$sex_code)
+## Plotting based on gender
+
+#Calculating total and voted voters per county along with %voted
+dt = aggregate(c(voter_dataset$total_voters), list(voter_dataset$county_desc,voter_dataset$sex_code), sum)
+colnames(dt) = c('County',"Sex_code",'NbrOfTotalVoters')
+dt2 = aggregate(c(voter_dataset$voted_voters), list(voter_dataset$county_desc,voter_dataset$sex_code), sum)
+colnames(dt2) = c('County',"Sex_code", "NbrOfVotedVoters")
+dt3 = merge(dt, dt2, by.x = c("County","Sex_code"), by.y=c("County","Sex_code"))
+dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
+
+## plotting number of total voters and count of voters who voted 
+
+### Sex Wise
+ggplot(dt3, aes(x=County))+
+  geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2')+
+  geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2')+
+  ggtitle("Distribution of Total Voter and Voted voters for 20 Counties") +
+  geom_text(data=dt3,aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
+            hjust = -0.1, vjust = 0.5, angle=90, size=3) +
+  ylim(0,2000000)+
+  xlab("Counties")+
+  ylab("Voter Count") +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45,hjust = 1))+
+  facet_wrap(~Sex_code)
+
+### County Wise 
+ggplot(dt3, aes(x=Sex_code))+
+  geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.6)+
+  geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.4)+
+  ggtitle("Distribution of Total Voter and Voted voters for 20 Counties") +
+  geom_text(data=dt3,aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
+            hjust = -0.1, vjust = 0.5, angle=90, size=3) +
+  ylim(0,2000000)+
+  xlab("Counties")+
+  ylab("Voter Count") +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45,hjust = 1))+
+  facet_wrap(~County)
+
+
+# 
+# sampldf = sample(voted_voter[voted_voter$voting_method == 'race_code',],20)
+# 
 
 
 
 
+
+
+sampledf = sample(voter_dataset[voter_dataset$voted_voters > voter_dataset$total_voters,  ],10) 
