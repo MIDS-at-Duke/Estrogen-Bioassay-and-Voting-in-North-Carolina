@@ -9,11 +9,17 @@ library(ggplot2)
 
 setwd("/Users/akshaypunwatkar/TeamProject2/team-project-2-estrogen-bioassay-and-voting-in-nc-avengers")
 
+rm(all_voter)
+rm(voted_voter)
+rm(merge_voter)
+rm(voter_dataset)
+rm(dt,dt2,dt3,sampledf)
+rm(counties)
 #Reading file with data for all the voters
-all_voter = read.csv("/Users/akshaypunwatkar/TeamProject2/team-project-2-estrogen-bioassay-and-voting-in-nc-avengers/Data/voter_stats_20161108.txt", sep = '')
+all_voter = read.csv("/Users/akshaypunwatkar/TeamProject2/team-project-2-estrogen-bioassay-and-voting-in-nc-avengers/Data/voter_stats_20161108.txt",header = TRUE,comment.char = "",sep='')
 
 #Reading file with data for the voters who actually voted 
-voted_voter = read.csv("/Users/akshaypunwatkar/TeamProject2/team-project-2-estrogen-bioassay-and-voting-in-nc-avengers/Data/history_stats_20161108.txt", sep = '\t')
+voted_voter = read.delim("/Users/akshaypunwatkar/TeamProject2/team-project-2-estrogen-bioassay-and-voting-in-nc-avengers/Data/history_stats_20161108.txt")
 
 
 #Making unwanted columns NULL (DATES)
@@ -24,6 +30,8 @@ voted_voter$update_date <- NULL
 voted_voter$stats_type <- NULL
 
 #Removing Rows with empty data
+#inital count of rows all_voter - 514837, voted_voter - 733866
+#new count of rows all_voter - 513640, voted_voter - 706552
 
 all_voter <- all_voter %>%
               na_if("") %>%
@@ -46,12 +54,21 @@ merge_voter= merge(voted_voter, all_voter,
                              "party_cd", "race_code", "ethnic_code", "sex_code",          
                              "age"))
 
+str(merge_voter)
+merge_voter$total_voters = as.numeric(merge_voter$total_voters)
+merge_voter$voted_voters = as.numeric(merge_voter$voted_voters)
+
+nrow(merge_voter[merge_voter$voted_voters > merge_voter$total_voters,  ])
+
 #counting and plotting number of observations for each county
 dt = aggregate(merge_voter$county_desc, list(merge_voter$county_desc), length)
 colnames(dt) = c('County','NbrOfObs')
 
 ggplot(dt)+
-  geom_point(aes(x=County, y=NbrOfObs))
+  geom_bar(aes(x=County, y=NbrOfObs), stat = 'identity')+
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45,hjust = 1, size = 3))
 
 #Selecting 20 counties at rondom
 set.seed(100)
@@ -94,14 +111,14 @@ ggplot(dt,aes(x=County, y=NbrOfObs),label=NbrOfObs)+
 # voting_method | voting_method_desc | voted_voters | voted_party_cd
 
 
-str(voter_dataset)
-voter_dataset$total_voters = as.numeric(voter_dataset$total_voters)
-voter_dataset$voted_voters = as.numeric(voter_dataset$voted_voters)
+
 
 
 #Checking the counts of total voters against voted voters 
 
-nrow(voter_dataset[voter_dataset$voted_voters > voter_dataset$total_voters,  ])  # 20486
+nrow(voted_voter[as.numeric(voted_voter$voted_voters) > as.numeric(voted_voter$total_voters),  ]) 
+
+nrow(voter_dataset[merge_voter$voted_voters > merge_voter$total_voters,  ])  # 20486
 nrow(voter_dataset[voter_dataset$voted_voters == voter_dataset$total_voters,  ]) # 15871
 nrow(voter_dataset[voter_dataset$voted_voters < voter_dataset$total_voters,  ])  # 63022
 
