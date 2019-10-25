@@ -6,6 +6,7 @@
 library(lme4)
 library(tidyverse)
 library(ggplot2)
+library(ggpubr)
 
 setwd("/Users/akshaypunwatkar/TeamProject2/team-project-2-estrogen-bioassay-and-voting-in-nc-avengers")
 
@@ -222,7 +223,9 @@ voting_dataset$party_cd <- NULL
 
 # Plotting some EDA
 
-## Calculating total and voted voters per county along with %voted
+#############################################################################################
+
+## Calculating County-wise total and voted voters per county along with %voted
 
 dt = aggregate(c(voting_stats_dataset$total_voters), list(voting_stats_dataset$county_desc), sum)
 colnames(dt) = c('County','NbrOfTotalVoters')
@@ -246,11 +249,40 @@ ggplot(dt3, aes(x=County))+
         plot.title = element_text(hjust = 0.5),
         axis.text.x = element_text(angle = 45,hjust = 1))
 
+#############################################################################################
 
+# Gender wise voter turnout
 
-## Plotting based on gender
+## Calculating Gender-wise total and voted voters per county along with %voted
 
-#Calculating total and voted voters per county along with %voted
+dt = aggregate(c(voting_stats_dataset$total_voters), 
+               list(voting_stats_dataset$sex_code), sum)
+colnames(dt) = c('sex_code','NbrOfTotalVoters')
+dt2 = aggregate(c(voting_stats_dataset$voted_voters), 
+                list(voting_stats_dataset$sex_code), sum)
+colnames(dt2) = c('sex_code','NbrOfVotedVoters')
+dt3 = merge(dt, dt2, by = "sex_code")
+dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
+
+## Plotting number of total voters and count of voters who voted
+
+ggplot(dt3, aes(x=sex_code))+
+  geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
+  geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.2)+
+  ggtitle("Gender-wise Voter Turnout") +
+  geom_text(data=dt3,aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
+            vjust = -0.4, hjust= 0.4, angle=0, size=3 ) +
+  xlab("Gender")+
+  ylab("Voter Count") +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45,hjust = 1))
+
+#############################################################################################
+
+## Plotting Voter turnout based on county and gender
+
+# Calculating total and voted voters per county along with %voted
 dt = aggregate(c(voting_stats_dataset$total_voters), 
                list(voting_stats_dataset$county_desc,voting_stats_dataset$sex_code), sum)
 colnames(dt) = c('County',"Sex_code",'NbrOfTotalVoters')
@@ -262,11 +294,12 @@ dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
 
 ## plotting number of total voters and count of voters who voted 
 
-### Sex Wise
+## County Wise
+
 ggplot(dt3, aes(x=County))+
   geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2')+
   geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2')+
-  ggtitle("Distribution of Gender wise Total Voter and Voted voters for 20 Counties") +
+  ggtitle("County-wise Voter Turnout") +
   geom_text(data=dt3,aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
             hjust = -0.1, vjust = 0.5, angle=90, size=3) +
   ylim(0,105000)+
@@ -277,11 +310,12 @@ ggplot(dt3, aes(x=County))+
         axis.text.x = element_text(angle = 45,hjust = 1))+
   facet_wrap(~Sex_code)
 
-### County Wise 
+## Gender Wise 
+
 ggplot(dt3, aes(x=Sex_code))+
   geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.6)+
   geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.4)+
-  ggtitle("Distribution of Total Voter and Voted voters for 20 Counties") +
+  ggtitle("Gender-wise voter Turnout") +
   geom_text(data=dt3,aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
             hjust = 0.5, vjust = -0.5, angle=0, size=3) +
   ylim(0,105000)+
@@ -294,4 +328,229 @@ ggplot(dt3, aes(x=Sex_code))+
 
 ### Based on the analysis, it seems for each county, the number of males and females who voted
 ### were comparable (+- 2%)
+
+#############################################################################################
+
+#Calculating and plotting Party wise voter turnout according to Gender
+
+## Calculating. Making dataframe for new values and groups 
+
+dt = aggregate(c(voting_stats_dataset$total_voters), 
+               list(voting_stats_dataset$party_cd,voting_stats_dataset$sex_code), sum)
+colnames(dt) = c('party_cd',"Sex_code",'NbrOfTotalVoters')
+dt2 = aggregate(c(voting_stats_dataset$voted_voters), 
+                list(voting_stats_dataset$party_cd,voting_stats_dataset$sex_code), sum)
+colnames(dt2) = c('party_cd',"Sex_code", "NbrOfVotedVoters")
+dt3 = merge(dt, dt2, by = c("party_cd","Sex_code"))
+dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
+
+## Plotting
+
+female_party_plot <- ggplot(dt3[dt3$Sex_code=="F",], aes(x=party_cd))+ 
+  geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
+  geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.2)+
+  ggtitle("Party-wise Voter-Turnout (Female)") +
+  geom_text(data=dt3[dt3$Sex_code=="F",],
+            aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
+            hjust = 0.5, vjust = -0.5, angle=0, size=3) +
+  xlab("Party Code")+
+  ylab("Female Voters") +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45,hjust = 1))
+
+male_party_plot <- ggplot(dt3[dt3$Sex_code=="M",], aes(x=party_cd))+ 
+  geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
+  geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.2)+
+  ggtitle("Party-wise Voter-Turnout (Male)") +
+  geom_text(data=dt3[dt3$Sex_code=="M",],
+            aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
+            hjust = 0.5, vjust = -0.5, angle=0, size=3) +
+  xlab("Party Code")+
+  ylab("Male Voters") +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45,hjust = 1))
+
+
+ggarrange(male_party_plot,female_party_plot, ncol = 2)
+
+#############################################################################################
+
+#Calculating and plotting Age wise voter turnout according to Gender
+
+dt = aggregate(c(voting_stats_dataset$total_voters), 
+               list(voting_stats_dataset$age,voting_stats_dataset$sex_code), sum)
+colnames(dt) = c('age',"Sex_code",'NbrOfTotalVoters')
+dt2 = aggregate(c(voting_stats_dataset$voted_voters), 
+                list(voting_stats_dataset$age,voting_stats_dataset$sex_code), sum)
+colnames(dt2) = c('age',"Sex_code", "NbrOfVotedVoters")
+dt3 = merge(dt, dt2, by = c("age","Sex_code"))
+dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
+
+
+female_age_plot <- ggplot(dt3[dt3$Sex_code=="F",], aes(x=age))+ 
+  geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
+  geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.2)+
+  ggtitle("Age wise Voter-Turnout (Female)") +
+  geom_text(data=dt3[dt3$Sex_code=="F",],
+            aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
+            hjust = 0.5, vjust = -0.5, angle=0, size=3) +
+  xlab("Age Groups")+
+  ylab("Female Voters") +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45,hjust = 1))
+
+male_age_plot <- ggplot(dt3[dt3$Sex_code=="M",], aes(x=age))+ 
+  geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
+  geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.2)+
+  ggtitle("Age wise Voter-Turnout (Male)") +
+  geom_text(data=dt3[dt3$Sex_code=="M",],
+            aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
+            hjust = 0.5, vjust = -0.5, angle=0, size=3) +
+  xlab("Age Groups")+
+  ylab("Male Voters") +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45,hjust = 1))
+
+
+ggarrange(female_age_plot,male_age_plot, ncol = 2)
+
+#############################################################################################
+
+#Calculating and plotting Race wise voter turnout according to Gender
+
+dt = aggregate(c(voting_stats_dataset$total_voters), 
+               list(voting_stats_dataset$race,voting_stats_dataset$sex_code), sum)
+colnames(dt) = c('race',"Sex_code",'NbrOfTotalVoters')
+dt2 = aggregate(c(voting_stats_dataset$voted_voters), 
+                list(voting_stats_dataset$race,voting_stats_dataset$sex_code), sum)
+colnames(dt2) = c('race',"Sex_code", "NbrOfVotedVoters")
+dt3 = merge(dt, dt2, by = c("race","Sex_code"))
+dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
+
+
+female_race_plot <- ggplot(dt3[dt3$Sex_code=="F",], aes(x=race))+ 
+  geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
+  geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.2)+
+  ggtitle("Race wise Voter-Turnout (Female)") +
+  geom_text(data=dt3[dt3$Sex_code=="F",],
+            aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
+            hjust = 0.5, vjust = -0.5, angle=0, size=3) +
+  xlab("Race")+
+  ylab("Female Voters") +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45,hjust = 1))
+
+male_race_plot <- ggplot(dt3[dt3$Sex_code=="M",], aes(x=race))+ 
+  geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
+  geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.2)+
+  ggtitle("Race wise Voter-Turnout (Male)") +
+  geom_text(data=dt3[dt3$Sex_code=="M",],
+            aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
+            hjust = 0.5, vjust = -0.5, angle=0, size=3) +
+  xlab("Race")+
+  ylab("Male Voters") +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45,hjust = 1))
+
+
+ggarrange(female_race_plot,male_race_plot, ncol = 2)
+
+#############################################################################################
+
+#Calculating and plotting Race wise voter turnout according to Ethinic Group
+
+dt = aggregate(c(voting_stats_dataset$total_voters), 
+               list(voting_stats_dataset$ethnic_code,voting_stats_dataset$sex_code), sum)
+colnames(dt) = c('ethnic_code',"Sex_code",'NbrOfTotalVoters')
+dt2 = aggregate(c(voting_stats_dataset$voted_voters), 
+                list(voting_stats_dataset$ethnic_code,voting_stats_dataset$sex_code), sum)
+colnames(dt2) = c('ethnic_code',"Sex_code", "NbrOfVotedVoters")
+dt3 = merge(dt, dt2, by = c("ethnic_code","Sex_code"))
+dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
+
+
+female_ethnic_plot <- ggplot(dt3[dt3$Sex_code=="F",], aes(x=ethnic_code))+ 
+  geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
+  geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.2)+
+  ggtitle("Ethnic-code wise Voter-Turnout (Female)") +
+  geom_text(data=dt3[dt3$Sex_code=="F",],
+            aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
+            hjust = 0.5, vjust = -0.5, angle=0, size=3) +
+  xlab("Ethnic-code")+
+  ylab("Female Voters") +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45,hjust = 1))
+
+male_ethnic_plot <- ggplot(dt3[dt3$Sex_code=="M",], aes(x=ethnic_code))+ 
+  geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
+  geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.2)+
+  ggtitle("Ethnic-code wise Voter-Turnout (Male)") +
+  geom_text(data=dt3[dt3$Sex_code=="M",],
+            aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
+            hjust = 0.5, vjust = -0.5, angle=0, size=3) +
+  xlab("Ethnic-code")+
+  ylab("Male Voters") +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45,hjust = 1))
+
+
+ggarrange(female_ethnic_plot,male_ethnic_plot, ncol = 2)
+
+#############################################################################################
+
+#Calculating and plotting Age-wise wise voter turnout according to Ethinic Group
+
+dt = aggregate(c(voting_stats_dataset$total_voters), 
+               list(voting_stats_dataset$ethnic_code,voting_stats_dataset$age), sum)
+colnames(dt) = c('ethnic_code',"age",'NbrOfTotalVoters')
+dt2 = aggregate(c(voting_stats_dataset$voted_voters), 
+                list(voting_stats_dataset$ethnic_code,voting_stats_dataset$age), sum)
+colnames(dt2) = c('ethnic_code',"age", "NbrOfVotedVoters")
+dt3 = merge(dt, dt2, by = c("ethnic_code","age"))
+dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
+
+
+agewise_ethnic_plot <- ggplot(dt3, aes(x=age))+ 
+  geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
+  geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.2)+
+  ggtitle("Age-wise Voter-Turnout for Ethnic groups") +
+  geom_text(data=dt3,
+            aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
+            hjust = 0.5, vjust = -0.5, angle=0, size=3) +
+  xlab("Age")+
+  ylab("Voters") +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45,hjust = 1))+
+  facet_wrap(~ethnic_code)
+
+ethnicwise_age_plot <- ggplot(dt3, aes(x=ethnic_code))+ 
+  geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
+  geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.2)+
+  ggtitle("Ethnic group wise Voter-Turnout for Age groups") +
+  geom_text(data=dt3,
+            aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
+            hjust = 0.5, vjust = -0.5, angle=0, size=3) +
+  xlab("Ehnic Code")+
+  ylab("Voters") +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45,hjust = 1))+
+  facet_wrap(~age)
+
+ggarrange(agewise_ethnic_plot,ethnicwise_age_plot, ncol = 2)
+
+
+
+#############################################################################################
+
+
 
