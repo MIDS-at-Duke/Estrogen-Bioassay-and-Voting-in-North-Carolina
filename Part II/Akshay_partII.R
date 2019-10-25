@@ -3,65 +3,136 @@
 
 #Akshay Punwatkar (AP509)
 
-
+library(lme4)
 library(tidyverse)
 library(ggplot2)
 
 setwd("/Users/akshaypunwatkar/TeamProject2/team-project-2-estrogen-bioassay-and-voting-in-nc-avengers")
 
-rm(all_voter)
-rm(voted_voter)
-rm(merge_voter)
-rm(voter_dataset)
-rm(dt,dt2,dt3,sampledf)
-rm(counties)
 #Reading file with data for all the voters
-all_voter = read.csv("/Users/akshaypunwatkar/TeamProject2/team-project-2-estrogen-bioassay-and-voting-in-nc-avengers/Data/voter_stats_20161108.txt",header = TRUE,comment.char = "",sep='')
+all_voter = read.csv("/Users/akshaypunwatkar/TeamProject2/team-project-2-estrogen-bioassay-and-voting-in-nc-avengers/Data/voter_stats_20161108.txt", 
+                     header = TRUE, comment.char = "",sep='', stringsAsFactors = F)
+#All voters -  514,846 Observations  (Actual number of rows in file)
+
+#Getting unique rows from all_voters
+all_voter = unique(all_voter)
+
+#All voters -  461,833 Observations
 
 #Reading file with data for the voters who actually voted 
 voted_voter = read.delim("/Users/akshaypunwatkar/TeamProject2/team-project-2-estrogen-bioassay-and-voting-in-nc-avengers/Data/history_stats_20161108.txt")
 
+#Voted voters - 734,126 Observations    (Actual number of rows in file)
+#all unique rows in Voted_voters already
 
-#Making unwanted columns NULL (DATES)
-all_voter$election_date <- NULL
-voted_voter$election_date <- NULL
-all_voter$stats_type <- NULL
-voted_voter$update_date <- NULL
-voted_voter$stats_type <- NULL
-
-#Removing Rows with empty data
-#inital count of rows all_voter - 514837, voted_voter - 733866
-#new count of rows all_voter - 513640, voted_voter - 706552
-
-all_voter <- all_voter %>%
-              na_if("") %>%
-                na.omit()
-
-voted_voter <- voted_voter %>%
-                na_if("") %>%
-                  na.omit()
-
-
-#renaming column in voted dataframe
+#renaming total_voter column in Voted_voters dataframe
 colnames(voted_voter)[9] <- "voted_voters"
 
+#Changing datatype of votes to numeric in both the dataframes
+all_voter$total_voters = as.numeric(all_voter$total_voters)
+voted_voter$voted_voters = as.numeric(as.character(voted_voter$voted_voters))
+
+#Calculating total voting percentage 
+Num_all_voters <- sum(all_voter$total_voters, na.rm = T)  #6,213,883  (Total voters)
+Num_of_voted_voters <- sum(voted_voter$voted_voters)      #4,768,079  (Voters who voted)
+Percent_Voted = (Num_of_voted_voters*100)/Num_all_voters  #76.73 % Voters Voted
+
+#Removing unwanted columns (DATES & constant value stats_type columns)
+all_voter$election_date <- NULL  
+voted_voter$election_date <- NULL
+voted_voter$update_date <- NULL
+all_voter$stats_type <- NULL
+voted_voter$stats_type <- NULL
+
+
+#Removing Rows with empty data
+#inital count of rows |  all_voter - 461,833, voted_voter - 734,126
+
+
+all_v_noNA <- all_voter %>%
+              na_if("") %>%
+                na.omit()
+#deleted 1026 rows with missing values (0.2%)
+
+voted_v_noNA <- voted_voter %>%
+                na_if("") %>%
+                  na.omit()
+#deleted 30,024 rows with missing values (4.0%)
+
+#new count of rows  |   all_voter - 460,807, voted_voter  - 704,102
+
+Num_all_voters <- sum(all_v_noNA$total_voters, na.rm = T)  #6,210,364  (Total voters)
+Num_of_voted_voters <- sum(voted_v_noNA$voted_voters)      #4,572,359  (Voters who voted)
+Percent_Voted = (Num_of_voted_voters*100)/Num_all_voters   #73.62 % Voters Voted
+
 #merging the two dataframes 
-merge_voter= merge(voted_voter, all_voter, 
-                   by.y = c("county_desc" , "precinct_abbrv", "vtd_abbrv", 
-                            "party_cd", "race_code","ethnic_code","sex_code",       
-                            "age"),
-                   by.x = c( "county_desc", "precinct_abbrv", "vtd_abbrv",          
-                             "party_cd", "race_code", "ethnic_code", "sex_code",          
-                             "age"))
+votedDataMerged = voted_v_noNA %>% 
+                    inner_join (all_v_noNA, 
+                                by = c("county_desc" , "precinct_abbrv", "vtd_abbrv", 
+                                        "party_cd", "race_code","ethnic_code","sex_code",       
+                                         "age"))
+#nrows in votedDataMerged 626,544
 
-str(merge_voter)
-merge_voter$total_voters = as.numeric(merge_voter$total_voters)
-merge_voter$voted_voters = as.numeric(merge_voter$voted_voters)
+#removing noNA dataframes (not required anymore)
+rm(voted_v_noNA,all_v_noNA)
 
-nrow(merge_voter[merge_voter$voted_voters > merge_voter$total_voters,  ])
+#dropping voting_method column (same as voting_method_desc)
+votedDataMerged$voting_method <- NULL
+
+str(votedDataMerged)
+votedDataMerged$county_desc = as.factor(votedDataMerged$county_desc)
+votedDataMerged$precinct_abbrv = as.factor(votedDataMerged$precinct_abbrv)
+votedDataMerged$vtd_abbrv = as.factor(votedDataMerged$vtd_abbrv)
+votedDataMerged$age = as.factor(votedDataMerged$age)
+votedDataMerged$party_cd = as.factor(votedDataMerged$party_cd)
+votedDataMerged$race_code = as.factor(votedDataMerged$race_code)
+votedDataMerged$ethnic_code = as.factor(votedDataMerged$ethnic_code)
+votedDataMerged$sex_code = as.factor(votedDataMerged$sex_code)
+
+# changing already factored variable to character and then again to factor (removing any extra factor)
+votedDataMerged$voting_method_desc = as.character(votedDataMerged$voting_method_desc)
+votedDataMerged$voting_method_desc = as.factor(votedDataMerged$voting_method_desc)
+votedDataMerged$voted_party_cd = as.character(votedDataMerged$voted_party_cd)
+votedDataMerged$voted_party_cd = as.factor(votedDataMerged$voted_party_cd)
+
+
+
+nrow(unique(votedDataMerged[,c("county_desc" , "precinct_abbrv", "vtd_abbrv",
+                           "party_cd", "race_code","ethnic_code","sex_code", 
+                           "age","voted_voters","voting_method_desc","voted_party_cd")]))
+
+
+# Creating a new dataframe to get Overall Voting stats 
+# Since the same number of total_voter was appearing for different voted_voters in votedDataMerged
+# (which differed by voting method and voted_party code), a new dataframe has to be created 
+
+voterStatDf <- aggregate(votedDataMerged$voted_voters, 
+                            by=list(votedDataMerged$county_desc , votedDataMerged$precinct_abbrv, 
+                                    votedDataMerged$vtd_abbrv,votedDataMerged$party_cd, votedDataMerged$age,
+                                    votedDataMerged$race_code,votedDataMerged$ethnic_code,votedDataMerged$sex_code,
+                                    votedDataMerged$total_voters), sum) 
+
+colnames(voterStatDf) <- c("county_desc", "precinct_abbrv", "vtd_abbrv" ,"party_cd",   
+                           "age", "race_code", "ethnic_code", "sex_code",  "total_voters",        
+                            "voted_voters")
+
+
+#Calculating total voting percentage after merging
+Num_all_voters <- sum(voterStatDf$total_voters)             #6,070,763 (Total voters)
+Num_of_voted_voters <- sum(voterStatDf$voted_voters)        #4,097,895  (Voters who voted)
+Percent_Voted = (Num_of_voted_voters*100)/Num_all_voters    #67.52% Voters Voted
+
+#Checking number & percentage of observations which has more Voted votes than total voters
+
+## in Voter stats dataframe
+nrow(voterStatDf[voterStatDf$voted_voters > voterStatDf$total_voters,  ]) # 3023 (0.84%)
+
+## in voter data merged dataframe
+nrow(votedDataMerged[votedDataMerged$voted_voters > votedDataMerged$total_voters,  ]) # 622 (0.1%)
+
 
 #counting and plotting number of observations for each county
-dt = aggregate(merge_voter$county_desc, list(merge_voter$county_desc), length)
+dt = aggregate(voterStatDf$county_desc, list(voterStatDf$county_desc), length)
 colnames(dt) = c('County','NbrOfObs')
 
 ggplot(dt)+
@@ -70,157 +141,121 @@ ggplot(dt)+
         plot.title = element_text(hjust = 0.5),
         axis.text.x = element_text(angle = 45,hjust = 1, size = 3))
 
+
+#counting and plotting number of total voters and voted voters for each county
+dt = aggregate(voterStatDf$total_voters, list(voterStatDf$county_desc), sum)
+colnames(dt) = c('County','NbrOfTotalVoters')
+dt2 = aggregate(voterStatDf$voted_voters, list(voterStatDf$county_desc), sum)
+colnames(dt2) = c('County','NbrOfVotedVoters')
+dt3 = merge(dt, dt2, by = "County")
+dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
+
+ggplot(dt3, aes(x=County))+
+  geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
+  geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.4)+
+  ggtitle("Distribution of Total Voter and Voted voters for 20 Counties") +
+  geom_text(data=dt3,aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
+            vjust = 0.6, hjust= -0.2, angle=90, size=2.5) +
+  xlab("Counties")+
+  ylab("Voter Count") +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45,hjust = 1,size=2))
+
+#############################################################################################
+
 #Selecting 20 counties at rondom
-set.seed(100)
-counties = sample(as.character(unique(merge_voter$county_desc)), size = 20,replace = T)
+
+set.seed(98)
+counties = sample(as.character(unique(votedDataMerged$county_desc)), size = 20,replace = T)
 
 #Couting number of observations of 20 selected counties 
 
 print(counties)
 
-# [1] "PITT"       "TYRRELL"    "ROBESON"   
-# [4] "CLEVELAND"  "SURRY"      "PASQUOTANK"
-# [7] "ANSON"      "LINCOLN"    "PASQUOTANK"
-# [10] "WILSON"     "BEAUFORT"   "BEAUFORT"  
-# [13] "LINCOLN"    "HARNETT"    "SAMPSON"   
-# [16] "MITCHELL"   "BURKE"      "YADKIN"    
-# [19] "JOHNSTON"   "PERQUIMANS"
+# [1] "BERTIE"     "CALDWELL"   "FRANKLIN"   "DARE"      
+# [5] "HARNETT"    "JONES"      "CHATHAM"    "SWAIN"     
+# [9] "PAMLICO"    "BUNCOMBE"   "CHEROKEE"   "MCDOWELL"  
+# [13] "STOKES"     "PITT"       "NASH"       "SURRY"     
+# [17] "WARREN"     "TYRRELL"    "LENOIR"     "CUMBERLAND"
 
-voter_dataset = subset(merge_voter, county_desc %in% counties)
-
-dt = aggregate(voter_dataset$county_desc, list(voter_dataset$county_desc), length)
-colnames(dt) = c('County','NbrOfObs')
-
-#Plotting the 20 couties with their count
-
-ggplot(dt,aes(x=County, y=NbrOfObs),label=NbrOfObs)+
-  geom_point(colour='Red')+
-  ylim(0,15500)+
-  geom_text(aes(label=NbrOfObs),hjust=0.5,vjust=-0.8)+
-  ggtitle("Number of Observations for 20 Counties") +
-  theme( plot.title = element_text(hjust = 0.5),
-        axis.text.x = element_text(angle = 45,hjust = 1))
-
-######## EDA ######## 
-
-#colnames(voter_dataset)
+#colnames(voting_dataset) - 12 columns
 # county_desc   | 
 # precinct_abbrv| vtd_abbrv | 
 # race_code     | sex_code  | age | ethnic_code
 # total_voters  |  party_cd  
-# voting_method | voting_method_desc | voted_voters | voted_party_cd
+# voting_method_desc | voted_voters | voted_party_cd
+
+#Subsetting data for 20 counties from merged and stats table
+
+voting_dataset = subset(votedDataMerged, county_desc %in% counties)
+voting_stats_dataset = subset(voterStatDf, county_desc %in% counties)
+
+#Calculating total voting percentage after sampling
+
+Num_all_voters <- sum(voting_stats_dataset$total_voters)        #947,012 (Total voters)
+Num_of_voted_voters <- sum(voting_stats_dataset$voted_voters)   #648,649  (Voters who voted)
+Percent_Voted = (Num_of_voted_voters*100)/Num_all_voters        #68.49% Voters Voted
 
 
+#Counting and Plotting the number of observations for 20 couties 
 
+dt = aggregate(voting_stats_dataset$county_desc, list(voting_stats_dataset$county_desc), length)
+colnames(dt) = c('County','NbrOfObs')
 
-
-#Checking the counts of total voters against voted voters 
-
-nrow(voted_voter[as.numeric(voted_voter$voted_voters) > as.numeric(voted_voter$total_voters),  ]) 
-
-nrow(voter_dataset[merge_voter$voted_voters > merge_voter$total_voters,  ])  # 20486
-nrow(voter_dataset[voter_dataset$voted_voters == voter_dataset$total_voters,  ]) # 15871
-nrow(voter_dataset[voter_dataset$voted_voters < voter_dataset$total_voters,  ])  # 63022
-
-# Removing unwatned factor levels
-voter_dataset$voting_method = as.character(voter_dataset$voting_method)
-voter_dataset$voting_method = as.factor(voter_dataset$voting_method)
-
-voter_dataset$voting_method_desc = as.character(voter_dataset$voting_method_desc)
-voter_dataset$voting_method_desc = as.factor(voter_dataset$voting_method_desc)
-
-#unique(voter_dataset[,c("voting_method","voting_method_desc")])
-
-#dropping voting_method
-voter_dataset$voting_method <- NULL
-
-#Age
-voter_dataset$age = as.character(voter_dataset$age)
-voter_dataset$age = as.factor(voter_dataset$age)
-
-#Age
-voter_dataset$sex_code = as.character(voter_dataset$sex_code)
-voter_dataset$sex_code = as.factor(voter_dataset$sex_code)
-
-#Precient abbreviation
-voter_dataset$precinct_abbrv = as.character(voter_dataset$precinct_abbrv)
-voter_dataset$precinct_abbrv = as.factor(voter_dataset$precinct_abbrv)
-
-#Precient abbreviation (National Level)
-voter_dataset$vtd_abbrv = as.character(voter_dataset$vtd_abbrv)
-voter_dataset$vtd_abbrv = as.factor(voter_dataset$vtd_abbrv)
-
-#Race code
-voter_dataset$race_code = as.character(voter_dataset$race_code)
-voter_dataset$race_code = as.factor(voter_dataset$race_code)
-
-#Ethinic Code
-voter_dataset$ethnic_code = as.character(voter_dataset$ethnic_code)
-voter_dataset$ethnic_code = as.factor(voter_dataset$ethnic_code)
-
-#Voted Party Code
-voter_dataset$voted_party_cd = as.character(voter_dataset$voted_party_cd)
-voter_dataset$voted_party_cd = as.factor(voter_dataset$voted_party_cd)
-
-#Voted Party Code
-voter_dataset$party_cd = as.character(voter_dataset$party_cd)
-voter_dataset$party_cd = as.factor(voter_dataset$party_cd)
-
-#Checking number of people who changed party
-aggregate( voter_dataset$party_cd, list(voter_dataset$party_cd,voter_dataset$voted_party_cd),length)
-
-# Plotting EDA
-
-#plotting distribution of total voter obeservations for each county
-ggplot(voter_dataset, aes(x=county_desc, y=total_voters))+
-  geom_boxplot(aes(fill= county_desc),width=0.2)+
-  ggtitle("Distribution of Total Voters for 20 Counties") +
-  xlab("Counties")+
-  ylab("Total Voters")+
-  theme(legend.position = "none",
-        plot.title = element_text(hjust = 0.5),
+ggplot(dt,aes(x=County, y=NbrOfObs),label=NbrOfObs)+
+  geom_bar(stat='identity',fill='Blue2', width = 0.4)+
+  ylim(0,15500)+
+  geom_text(aes(label= scales::comma(NbrOfObs)),hjust=0.5,vjust=-0.8,size=3)+
+  ggtitle("Number of Observations for 20 Counties") +
+  theme( plot.title = element_text(hjust = 0.5),
         axis.text.x = element_text(angle = 45,hjust = 1))
 
 
-#plotting distribution of voted voter obeservations for each county
-ggplot(voter_dataset, aes(x=county_desc, y=voted_voters))+
-  geom_boxplot(aes(fill= county_desc),width=0.2)+
-  ggtitle("Distribution of Voted Voters for 20 Counties") +
-  xlab("Counties")+
-  ylab("Number of Voters who Voted") +
-  theme(legend.position = "none",
-        plot.title = element_text(hjust = 0.5),
-        axis.text.x = element_text(angle = 45,hjust = 1))
+#Checking number observations where party has changed
+nrow(voting_dataset[voting_dataset$party_cd != voting_dataset$voted_party_cd,]) #868 (0.8%)
 
+# Since only 0.8% observations have different partycd and voted_party_cd. 
+# Dropping party_cd column
 
-#Calculating total and voted voters per county along with %voted
-dt = aggregate(c(voter_dataset$total_voters), list(voter_dataset$county_desc), sum)
+voting_dataset$party_cd <- NULL
+
+# Plotting some EDA
+
+## Calculating total and voted voters per county along with %voted
+
+dt = aggregate(c(voting_stats_dataset$total_voters), list(voting_stats_dataset$county_desc), sum)
 colnames(dt) = c('County','NbrOfTotalVoters')
-dt2 = aggregate(c(voter_dataset$voted_voters), list(voter_dataset$county_desc), sum)
+dt2 = aggregate(c(voting_stats_dataset$voted_voters), list(voting_stats_dataset$county_desc), sum)
 colnames(dt2) = c('County','NbrOfVotedVoters')
 dt3 = merge(dt, dt2, by = "County")
 dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
 
-## plotting number of total voters and count of voters who voted
+## Plotting number of total voters and count of voters who voted
+
 ggplot(dt3, aes(x=County))+
-  geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2')+
-  geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2')+
+  geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
+  geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.4)+
   ggtitle("Distribution of Total Voter and Voted voters for 20 Counties") +
   geom_text(data=dt3,aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
-            vjust = -0.5, angle=0) +
+            vjust = 0.6, hjust= -0.2, angle=90, size=2.5 ) +
+  ylim(0,200000)+
   xlab("Counties")+
   ylab("Voter Count") +
   theme(legend.position = "none",
         plot.title = element_text(hjust = 0.5),
         axis.text.x = element_text(angle = 45,hjust = 1))
 
-levels(voter_dataset$sex_code)
+
+
 ## Plotting based on gender
 
 #Calculating total and voted voters per county along with %voted
-dt = aggregate(c(voter_dataset$total_voters), list(voter_dataset$county_desc,voter_dataset$sex_code), sum)
+dt = aggregate(c(voting_stats_dataset$total_voters), 
+               list(voting_stats_dataset$county_desc,voting_stats_dataset$sex_code), sum)
 colnames(dt) = c('County',"Sex_code",'NbrOfTotalVoters')
-dt2 = aggregate(c(voter_dataset$voted_voters), list(voter_dataset$county_desc,voter_dataset$sex_code), sum)
+dt2 = aggregate(c(voting_stats_dataset$voted_voters), 
+                list(voting_stats_dataset$county_desc,voting_stats_dataset$sex_code), sum)
 colnames(dt2) = c('County',"Sex_code", "NbrOfVotedVoters")
 dt3 = merge(dt, dt2, by.x = c("County","Sex_code"), by.y=c("County","Sex_code"))
 dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
@@ -231,10 +266,10 @@ dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
 ggplot(dt3, aes(x=County))+
   geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2')+
   geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2')+
-  ggtitle("Distribution of Total Voter and Voted voters for 20 Counties") +
+  ggtitle("Distribution of Gender wise Total Voter and Voted voters for 20 Counties") +
   geom_text(data=dt3,aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
             hjust = -0.1, vjust = 0.5, angle=90, size=3) +
-  ylim(0,2000000)+
+  ylim(0,105000)+
   xlab("Counties")+
   ylab("Voter Count") +
   theme(legend.position = "none",
@@ -248,8 +283,8 @@ ggplot(dt3, aes(x=Sex_code))+
   geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.4)+
   ggtitle("Distribution of Total Voter and Voted voters for 20 Counties") +
   geom_text(data=dt3,aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
-            hjust = -0.1, vjust = 0.5, angle=90, size=3) +
-  ylim(0,2000000)+
+            hjust = 0.5, vjust = -0.5, angle=0, size=3) +
+  ylim(0,105000)+
   xlab("Counties")+
   ylab("Voter Count") +
   theme(legend.position = "none",
@@ -257,14 +292,6 @@ ggplot(dt3, aes(x=Sex_code))+
         axis.text.x = element_text(angle = 45,hjust = 1))+
   facet_wrap(~County)
 
+### Based on the analysis, it seems for each county, the number of males and females who voted
+### were comparable (+- 2%)
 
-# 
-# sampldf = sample(voted_voter[voted_voter$voting_method == 'race_code',],20)
-# 
-
-
-
-
-
-
-sampledf = sample(voter_dataset[voter_dataset$voted_voters > voter_dataset$total_voters,  ],10) 
