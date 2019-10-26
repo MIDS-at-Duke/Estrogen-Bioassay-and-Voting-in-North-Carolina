@@ -1,0 +1,25 @@
+---
+title: "Angela"
+output: pdf_document
+---
+
+```{r message = FALSE}
+#rm(list = ls())
+library(ggplot2)
+library(lme4) #for the lmer function
+library(lattice)
+library(lme4)
+library(lmerTest)
+library(dplyr)
+```
+```{r}
+data <- read.table ("/Users/yu/Documents/Duke/courses/19fall/IDS702.01/HW & LAB/Team Project 2/team-project-2-estrogen-bioassay-and-voting-in-nc-avengers/Data/bioassay.txt", header=T, sep=" ")
+head(data)
+dim(data)
+summary(data)
+
+data$uterus = as.numeric(data$uterus)
+data$weight = as.numeric(data$weight)
+data$group = as.factor(data$group)
+
+```
