@@ -561,37 +561,21 @@ colnames(voting_stats_dataset)
 # [1] "county_desc"    "precinct_abbrv" "vtd_abbrv"      "party_cd"       "age"           
 # [6] "race_code"      "ethnic_code"    "sex_code"       "total_voters"   "voted_voters" 
 
-Model_1 <- glm(cbind(total_voters, voted_voters)~ as.factor(county_desc) + 
-                 as.factor(race_code) + as.factor(ethnic_code) + as.factor(age), 
+# All factors included, with varying effects by county. 
+Model_1 <- glmer(cbind(total_voters, voted_voters) ~ (1|county_desc) + 
+                 race_code + ethnic_code + age + party_cd + sex_code, 
                data = voting_stats_dataset, family = binomial)
 
 summary(Model_1)
 
-Model_2 <- glm(cbind(voted_voters,total_voters)~ as.factor(county_desc) + 
-                 as.factor(race_code) + as.factor(ethnic_code) + as.factor(age), 
-               data = voting_stats_dataset, family = binomial)
+Model_2 <- glmer(cbind(total_voters, voted_voters) ~ (1|county_desc) + 
+                   race_code + ethnic_code + age + party_cd + sex_code, 
+                 data = voting_stats_dataset, family = binomial)
 
-summary(Model_2)
+summary(Model_1)
 
 
 
-# M2 <- glm(cbind(success,n-success)~x,data=Data_agg,family=binomial); summary(M2)
-
-# Varing Intercept for Counties
-# M2 <- glm(cbind(success,n-success)~x,data=Data_agg,family=binomial); summary(M2)
-# Starting with a simple model one
-# voting_dataset = subset(votedDataMerged, county_desc %in% counties)
-# voting_stats_dataset = subset(voterStatDf, county_desc %in% counties)
-# glm(y~x,data=Data,family=binomial); summary(M1)
-# # library(lme4)
-# # model1 <- glmer(bush ~ black+female+(1|state_label),family=binomial(link="logit"),
-# #                 data=polls_subset)
-# # summary(model1)
-#  
-# # Model One 
-# # Q5_model <- lmer(eval ~ beauty + (1 | profnumber), data = Beauty)
-# # summary(Q5_model)
-# Derek_Model_1 <- glm(voted_voters ~ age, data = voting_dataset, family = binomial)
 
 
 
