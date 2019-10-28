@@ -1,0 +1,25 @@
+Random effects:
+ Groups      Name        Variance Std.Dev.
+ county_desc (Intercept) 0.00441  0.06641 
+Number of obs: 58123, groups:  county_desc, 20
+
+Fixed effects:
+                Estimate Std. Error z value Pr(>|z|)    
+(Intercept)     0.339244   0.030924  10.970  < 2e-16 ***
+race_codeB      0.194583   0.022966   8.473  < 2e-16 *** (Black)
+race_codeI      0.099661   0.032104   3.104 0.001907 ** (Native American)
+race_codeM     -0.092415   0.032075  -2.881 0.003962 ** (Mixed)
+race_codeO      0.211176   0.026159   8.073 6.87e-16 *** (Other)
+race_codeU      0.113557   0.025453   4.461 8.14e-06 *** (Unknown)
+race_codeW      0.176310   0.022742   7.752 9.01e-15 *** (White)
+ethnic_codeNL   0.083161   0.014029   5.928 3.07e-09 *** (Not Hispanic)
+ethnic_codeUN   0.100203   0.014258   7.028 2.10e-12 *** (Unknown)
+ageAge 26 - 40 -0.068030   0.006156 -11.051  < 2e-16 *** (Age Group)
+ageAge 41 - 65 -0.329286   0.005718 -57.587  < 2e-16 *** (Age Group)
+ageAge Over 66 -0.354563   0.006313 -56.162  < 2e-16 *** (Age Group)
+party_cdLIB    -0.176187   0.027061  -6.511 7.48e-11 *** (Libertarians Party)
+party_cdREP    -0.070899   0.004417 -16.050  < 2e-16 *** (Rep Party)
+party_cdUNA     0.074500   0.004351  17.121  < 2e-16 *** (Undesignated Party) 
+sex_codeM       0.053906   0.003306  16.307  < 2e-16 *** (Male)
+sex_codeU      -0.049299   0.012974  -3.800 0.000145 *** (Unknown)
+
