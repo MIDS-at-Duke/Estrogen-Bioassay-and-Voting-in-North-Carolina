@@ -528,21 +528,21 @@ agewise_ethnic_plot <- ggplot(dt3, aes(x=age))+
   xlab("Age")+
   ylab("Voters") +
   theme(legend.position = "none",
-        plot.title = element_text(hjust = 0.5),
+        plot.title = element_text(hjust = 0.5, size=10),
         axis.text.x = element_text(angle = 45,hjust = 1))+
   facet_wrap(~ethnic_code)
 
 ethnicwise_age_plot <- ggplot(dt3, aes(x=ethnic_code))+ 
   geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
   geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.2)+
-  ggtitle("Ethnic group wise Voter-Turnout for Age groups") +
+  ggtitle("Ethnicity-wise Voter-Turnout for Age groups") +
   geom_text(data=dt3,
             aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
             hjust = 0.5, vjust = -0.5, angle=0, size=3) +
   xlab("Ehnic Code")+
   ylab("Voters") +
   theme(legend.position = "none",
-        plot.title = element_text(hjust = 0.5),
+        plot.title = element_text(hjust = 0.5, size=10),
         axis.text.x = element_text(angle = 45,hjust = 1))+
   facet_wrap(~age)
 
@@ -551,6 +551,17 @@ ggarrange(agewise_ethnic_plot,ethnicwise_age_plot, ncol = 2)
 
 
 #############################################################################################
+
+
+
+
+
+
+
+
+
+
+
 
 
 
