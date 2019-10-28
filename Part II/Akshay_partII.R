@@ -217,9 +217,9 @@ ggplot(dt,aes(x=County, y=NbrOfObs),label=NbrOfObs)+
 nrow(voting_dataset[voting_dataset$party_cd != voting_dataset$voted_party_cd,]) #868 (0.8%)
 
 # Since only 0.8% observations have different partycd and voted_party_cd. 
-# Dropping party_cd column
+# Dropping voted_party_cd column
 
-voting_dataset$party_cd <- NULL
+voting_dataset$voted_party_cd <- NULL
 
 # Plotting some EDA
 
@@ -551,6 +551,17 @@ ggarrange(agewise_ethnic_plot,ethnicwise_age_plot, ncol = 2)
 
 
 #############################################################################################
+#     Modeling
+#############################################################################################
+
+
+
+
+Model_1 <- glm(cbind(total_voters, voted_voters)~ as.factor(county_desc) +
+                 as.factor(race_code) + as.factor(ethnic_code) + as.factor(age),
+               data = voting_stats_dataset, family = binomial)
+
+summary(Model_1)
 
 
 
