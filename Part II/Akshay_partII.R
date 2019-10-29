@@ -4,9 +4,19 @@
 #Akshay Punwatkar (AP509)
 
 library(lme4)
-library(tidyverse)
 library(ggplot2)
+library(ggcorrplot)
+library(corrplot)
+library(arm)
+library(e1071)
+library(caret)
+library(pROC)
+library(rms)
+library(tidyverse)
 library(ggpubr)
+library(kableExtra)
+library(knitr)
+library(broom)
 
 setwd("/Users/akshaypunwatkar/TeamProject2/team-project-2-estrogen-bioassay-and-voting-in-nc-avengers")
 
@@ -62,11 +72,20 @@ voted_v_noNA <- voted_voter %>%
 
 #new count of rows  |   all_voter - 460,807, voted_voter  - 704,102
 
+#############################################################################################
+## Calculating total voting percentage after merging
+#############################################################################################
+
 Num_all_voters <- sum(all_v_noNA$total_voters, na.rm = T)  #6,210,364  (Total voters)
 Num_of_voted_voters <- sum(voted_v_noNA$voted_voters)      #4,572,359  (Voters who voted)
 Percent_Voted = (Num_of_voted_voters*100)/Num_all_voters   #73.62 % Voters Voted
 
-#merging the two dataframes 
+#############################################################################################
+#############################################################################################
+## merging the two dataframes 
+#############################################################################################
+#############################################################################################
+
 votedDataMerged = voted_v_noNA %>% 
                     inner_join (all_v_noNA, 
                                 by = c("county_desc" , "precinct_abbrv", "vtd_abbrv", 
@@ -102,28 +121,34 @@ nrow(unique(votedDataMerged[,c("county_desc" , "precinct_abbrv", "vtd_abbrv",
                            "party_cd", "race_code","ethnic_code","sex_code", 
                            "age","voted_voters","voting_method_desc","voted_party_cd")]))
 
-
+#############################################################################################
 # Creating a new dataframe to get Overall Voting stats 
+#############################################################################################
+
 # Since the same number of total_voter was appearing for different voted_voters in votedDataMerged
 # (which differed by voting method and voted_party code), a new dataframe has to be created 
 
 voterStatDf <- aggregate(votedDataMerged$voted_voters, 
-                            by=list(votedDataMerged$county_desc , votedDataMerged$precinct_abbrv, 
-                                    votedDataMerged$vtd_abbrv,votedDataMerged$party_cd, votedDataMerged$age,
-                                    votedDataMerged$race_code,votedDataMerged$ethnic_code,votedDataMerged$sex_code,
-                                    votedDataMerged$total_voters), sum) 
+                          by=list(votedDataMerged$county_desc , votedDataMerged$precinct_abbrv, 
+                                  votedDataMerged$vtd_abbrv,votedDataMerged$party_cd, votedDataMerged$age,
+                                  votedDataMerged$race_code,votedDataMerged$ethnic_code,votedDataMerged$sex_code,
+                                  votedDataMerged$total_voters), sum) 
 
-colnames(voterStatDf) <- c("county_desc", "precinct_abbrv", "vtd_abbrv" ,"party_cd",   
-                           "age", "race_code", "ethnic_code", "sex_code",  "total_voters",        
+colnames(voterStatDf) <-  c("county_desc", "precinct_abbrv", "vtd_abbrv" ,"party_cd",   
+                            "age", "race_code", "ethnic_code", "sex_code",  "total_voters",        
                             "voted_voters")
 
+#############################################################################################
+## Calculating total voting percentage after merging
+#############################################################################################
 
-#Calculating total voting percentage after merging
 Num_all_voters <- sum(voterStatDf$total_voters)             #6,070,763 (Total voters)
 Num_of_voted_voters <- sum(voterStatDf$voted_voters)        #4,097,895  (Voters who voted)
 Percent_Voted = (Num_of_voted_voters*100)/Num_all_voters    #67.52% Voters Voted
 
-#Checking number & percentage of observations which has more Voted votes than total voters
+#############################################################################################
+## Checking number & percentage of observations which has more Voted votes than total voters
+#############################################################################################
 
 ## in Voter stats dataframe
 nrow(voterStatDf[voterStatDf$voted_voters > voterStatDf$total_voters,  ]) # 3023 (0.84%)
@@ -131,8 +156,10 @@ nrow(voterStatDf[voterStatDf$voted_voters > voterStatDf$total_voters,  ]) # 3023
 ## in voter data merged dataframe
 nrow(votedDataMerged[votedDataMerged$voted_voters > votedDataMerged$total_voters,  ]) # 622 (0.1%)
 
-
+#############################################################################################
 #counting and plotting number of observations for each county
+#############################################################################################
+
 dt = aggregate(voterStatDf$county_desc, list(voterStatDf$county_desc), length)
 colnames(dt) = c('County','NbrOfObs')
 
@@ -163,9 +190,12 @@ ggplot(dt3, aes(x=County))+
         plot.title = element_text(hjust = 0.5),
         axis.text.x = element_text(angle = 45,hjust = 1,size=2))
 
-#############################################################################################
 
+#############################################################################################
+#############################################################################################
 #Selecting 20 counties at rondom
+#############################################################################################
+#############################################################################################
 
 set.seed(98)
 counties = sample(as.character(unique(votedDataMerged$county_desc)), size = 20,replace = T)
@@ -192,14 +222,17 @@ print(counties)
 voting_dataset = subset(votedDataMerged, county_desc %in% counties)
 voting_stats_dataset = subset(voterStatDf, county_desc %in% counties)
 
-#Calculating total voting percentage after sampling
+#############################################################################################
+## Calculating total voting percentage after sampling
+#############################################################################################
 
 Num_all_voters <- sum(voting_stats_dataset$total_voters)        #947,012 (Total voters)
 Num_of_voted_voters <- sum(voting_stats_dataset$voted_voters)   #648,649  (Voters who voted)
 Percent_Voted = (Num_of_voted_voters*100)/Num_all_voters        #68.49% Voters Voted
 
-
+#############################################################################################
 #Counting and Plotting the number of observations for 20 couties 
+#############################################################################################
 
 dt = aggregate(voting_stats_dataset$county_desc, list(voting_stats_dataset$county_desc), length)
 colnames(dt) = c('County','NbrOfObs')
@@ -221,11 +254,13 @@ nrow(voting_dataset[voting_dataset$party_cd != voting_dataset$voted_party_cd,]) 
 
 voting_dataset$voted_party_cd <- NULL
 
+#############################################################################################
 # Plotting some EDA
-
 #############################################################################################
 
+#############################################################################################
 ## Calculating County-wise total and voted voters per county along with %voted
+#############################################################################################
 
 dt = aggregate(c(voting_stats_dataset$total_voters), list(voting_stats_dataset$county_desc), sum)
 colnames(dt) = c('County','NbrOfTotalVoters')
@@ -250,8 +285,8 @@ ggplot(dt3, aes(x=County))+
         axis.text.x = element_text(angle = 45,hjust = 1))
 
 #############################################################################################
-
 # Gender wise voter turnout
+#############################################################################################
 
 ## Calculating Gender-wise total and voted voters per county along with %voted
 
@@ -279,8 +314,8 @@ ggplot(dt3, aes(x=sex_code))+
         axis.text.x = element_text(angle = 45,hjust = 1))
 
 #############################################################################################
-
 ## Plotting Voter turnout based on county and gender
+#############################################################################################
 
 # Calculating total and voted voters per county along with %voted
 dt = aggregate(c(voting_stats_dataset$total_voters), 
@@ -330,8 +365,8 @@ ggplot(dt3, aes(x=Sex_code))+
 ### were comparable (+- 2%)
 
 #############################################################################################
-
 #Calculating and plotting Party wise voter turnout according to Gender
+#############################################################################################
 
 ## Calculating. Making dataframe for new values and groups 
 
@@ -376,8 +411,8 @@ male_party_plot <- ggplot(dt3[dt3$Sex_code=="M",], aes(x=party_cd))+
 ggarrange(male_party_plot,female_party_plot, ncol = 2)
 
 #############################################################################################
-
 #Calculating and plotting Age wise voter turnout according to Gender
+#############################################################################################
 
 dt = aggregate(c(voting_stats_dataset$total_voters), 
                list(voting_stats_dataset$age,voting_stats_dataset$sex_code), sum)
@@ -419,8 +454,8 @@ male_age_plot <- ggplot(dt3[dt3$Sex_code=="M",], aes(x=age))+
 ggarrange(female_age_plot,male_age_plot, ncol = 2)
 
 #############################################################################################
-
 #Calculating and plotting Race wise voter turnout according to Gender
+#############################################################################################
 
 dt = aggregate(c(voting_stats_dataset$total_voters), 
                list(voting_stats_dataset$race,voting_stats_dataset$sex_code), sum)
@@ -462,8 +497,8 @@ male_race_plot <- ggplot(dt3[dt3$Sex_code=="M",], aes(x=race))+
 ggarrange(female_race_plot,male_race_plot, ncol = 2)
 
 #############################################################################################
-
 #Calculating and plotting Race wise voter turnout according to Ethinic Group
+#############################################################################################
 
 dt = aggregate(c(voting_stats_dataset$total_voters), 
                list(voting_stats_dataset$ethnic_code,voting_stats_dataset$sex_code), sum)
@@ -505,8 +540,9 @@ male_ethnic_plot <- ggplot(dt3[dt3$Sex_code=="M",], aes(x=ethnic_code))+
 ggarrange(female_ethnic_plot,male_ethnic_plot, ncol = 2)
 
 #############################################################################################
-
 #Calculating and plotting Age-wise wise voter turnout according to Ethinic Group
+#############################################################################################
+
 
 dt = aggregate(c(voting_stats_dataset$total_voters), 
                list(voting_stats_dataset$ethnic_code,voting_stats_dataset$age), sum)
@@ -548,30 +584,49 @@ ethnicwise_age_plot <- ggplot(dt3, aes(x=ethnic_code))+
 
 ggarrange(agewise_ethnic_plot,ethnicwise_age_plot, ncol = 2)
 
-
-
 #############################################################################################
-#     Modeling
+## Removing precincts 
 #############################################################################################
 
 
+Votes_Dataset = aggregate(list( voting_stats_dataset$total_voters,voting_stats_dataset$voted_voters),
+                       by=list(voting_stats_dataset$county_desc , voting_stats_dataset$party_cd,
+                               voting_stats_dataset$age,voting_stats_dataset$race_code,
+                               voting_stats_dataset$ethnic_code,voting_stats_dataset$sex_code), sum) 
+
+colnames(Votes_Dataset) <- c("county_desc","party_cd", "age", "race_code", "ethnic_code", 
+                         "sex_code",  "total_voters", "voted_voters")
+
+#############################################################################################
+Num_all_voters <- sum(Votes_Dataset$total_voters)        #947,012 (Total voters)
+Num_of_voted_voters <- sum(Votes_Dataset$voted_voters)   #648,649 (Voters who voted)
+Percent_Voted = (Num_of_voted_voters*100)/Num_all_voters #68.5 %
+#############################################################################################
+
+dim(Votes_Dataset) # 7291 (rows) * 8 (columns)
+
+#############################################################################################
+## Modelling
+#############################################################################################
 
 
 Model_1 <- glm(cbind(total_voters, voted_voters)~ as.factor(county_desc) +
                  as.factor(race_code) + as.factor(ethnic_code) + as.factor(age),
-               data = voting_stats_dataset, family = binomial)
+               data = Votes_Dataset, family = binomial)
+
+summary(Model_1)
+
+Model_1 <- glmer(cbind(total_voters, voted_voters) ~ (1|county_desc) +
+                   race_code + ethnic_code + age,
+                 data = Votes_Dataset, family = binomial)
+
 
 summary(Model_1)
 
 
+ranef(Model_1)
 
-
-
-
-
-
-
-
+dotplot(ranef(Model_1), condVar= T)
 
 
 
