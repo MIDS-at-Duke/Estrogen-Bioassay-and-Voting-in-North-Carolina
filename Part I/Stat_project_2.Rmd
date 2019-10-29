@@ -1,0 +1,93 @@
+---
+title: "Stat_Project_2"
+output: html_document
+---
+
+```{r}
+library(ggplot2)
+library(lme4)
+```
+
+```{r}
+
+estrogen <- read.table(file.choose(), header=T, sep=" ", colClasses = c('protocol' = 'factor'))
+estrogen
+
+estrogen$uterus <- as.character(estrogen$uterus)
+estrogen$uterus <- as.numeric(estrogen$uterus)
+estrogen$weight <- as.character(estrogen$weight)
+estrogen$weight <- as.numeric(estrogen$weight)
+estrogen$group <- as.factor(estrogen$group)
+
+summary(estrogen)
+```
+
+
+```{r}
+hist(estrogen$uterus)
+hist(log(estrogen$uterus))
+#This one looks the best compared to the other transformations, use this for analysis
+hist(sqrt(estrogen$uterus))
+hist((estrogen$uterus)^(1/3))
+```
+
+
+```{r}
+
+ggplot(data = estrogen, aes(x=weight, y=log(uterus))) + geom_point(alpha = .5 , color = 'blue') + geom_smooth(method= 'lm' ,col= 'red3') + facet_wrap(~protocol, ncol = 3)
+#the mature rats have a negative pattern, the immature rats do not appear to have a pattern
+
+ggplot(data = estrogen, aes(x=EE, y=log(uterus))) + geom_point(alpha = .5 , color = 'blue') + geom_smooth(method= 'lm' ,col= 'red3') + facet_wrap(~protocol, ncol = 3)
+#There appears to be a positive relationship between EE and log uterus weight
+
+ggplot(data = estrogen, aes(x=ZM, y=log(uterus))) + geom_point(alpha = .5 , color = 'blue') + geom_smooth(method= 'lm' ,col= 'red3') + facet_wrap(~protocol, ncol = 3)
+#There appears to be a negative relationship between ZM and uterus weight
+
+ggplot(data = estrogen, aes(x=lab, y=log(uterus))) + geom_point(alpha = .5 , color = 'blue') + geom_smooth(method= 'lm' ,col= 'red3') + facet_wrap(~protocol, ncol = 3) + theme(axis.text.x = element_text(angle = 90))
+#It appears that labs doing similar experiments have similar outcomes
+
+ggplot(data = estrogen, aes(x=lab, y=log(uterus))) + geom_point(alpha = .5 , color = 'blue') + geom_smooth(method= 'lm' ,col= 'red3') + theme(axis.text.x = element_text(angle = 90))
+#See differences in labs, but this could be due to some do not do certain protocols. Need to build the model to check
+
+ggplot(data = estrogen, aes(x=group, y=log(uterus))) + geom_point(alpha = .5 , color = 'blue') + geom_smooth(method= 'lm' ,col= 'red3') + facet_wrap(~protocol, ncol = 3)
+#replicate groups are different because each replicate group was given a different dose of EE and ZM
+
+ggplot(data = estrogen, aes(x=group, y=log(uterus))) + geom_point(alpha = .5 , color = 'blue') + geom_smooth(method= 'lm' ,col= 'red3')
+#Between all protocols the groups show similar trends of more EE leads to higher uterus weight. Interaction between EE and ZM may be significant
+
+ggplot(data = estrogen, aes(x=protocol, y=log(uterus))) + geom_point(alpha = .5 , color = 'blue') + geom_smooth(method= 'lm' ,col= 'red3')
+#Difference in weight, but expected since the age of the rats differed in the protocols
+
+
+plot(log(uterus)~weight, data = estrogen)
+
+```
+
+
+```{r}
+partial_estrogen_model1 <- lmer(log(uterus)~ weight + EE + ZM + (1 | lab), data = estrogen)
+summary(partial_estrogen_model1)
+ranef(partial_estrogen_model1)
+#T values for these are large, and therefore the model is acceptable
+
+```
+
+
+```{r}
+
+full_estrogen_model <- lmer(log(uterus)~ weight + EE + ZM + protocol + (1 | lab), data = estrogen)
+summary(full_estrogen_model)
+ranef(full_estrogen_model)
+#Including protocol means weight now has a lower t value, therefore dropping weight for next model
+```
+
+```{r}
+
+partial_estrogen_model2 <- lmer(log(uterus)~ EE + ZM + protocol + (1 | lab), data = estrogen)
+summary(partial_estrogen_model2)
+ranef(partial_estrogen_model2)
+
+```
+
+
+
