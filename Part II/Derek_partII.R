@@ -7,6 +7,7 @@ library(lme4)
 library(tidyverse)
 library(ggplot2)
 library(ggpubr)
+library(MASS)
 
 #setwd("/Users/derek/deskeTeamProject2/team-project-2-estrogen-bioassay-and-voting-in-nc-avengers")
 
@@ -562,19 +563,33 @@ colnames(voting_stats_dataset)
 # [6] "race_code"      "ethnic_code"    "sex_code"       "total_voters"   "voted_voters" 
 
 # All factors included, with varying effects by county. 
-Model_1 <- glmer(cbind(total_voters, voted_voters) ~ (1|county_desc) + 
+model_full <- glmer(cbind(total_voters, voted_voters) ~ (1|county_desc) + 
                  race_code + ethnic_code + age + party_cd + sex_code, 
                data = voting_stats_dataset, family = binomial)
 
-summary(Model_1)
-
-Model_2 <- glmer(cbind(total_voters, voted_voters) ~ (1|county_desc) + 
-                   race_code + ethnic_code + age + party_cd + sex_code, 
-                 data = voting_stats_dataset, family = binomial)
-
-summary(Model_1)
+summary(model_full)
 
 
+# model_base <- glmer(cbind(total_voters, voted_voters) ~ (1|county_desc), data=voting_stats_dataset,
+#                     family = binomial)
+# 
+# model_stepwise_aic = step(model_base,
+#                           scope = list(upper = model_full,
+#                                        lower = model_base),
+#                           direction = 'both',
+#                           trace=0,
+#                           k = 2)
+
+# ?step
+# 
+# BIC_backward <- step(Model_1, scope = full_model, trace = 0, direction = 'backward')
+# BIC_backward$call
+# summary(BIC_backward)
+# 
+# #### Doing Stepwise to find the model 
+# #AIC_backward <- step(null_model, scope = formula(full_model), trace = 0, direction = 'backward')
+# #AIC_backward$call
+# #summary(AIC_backward)
 
 
 
