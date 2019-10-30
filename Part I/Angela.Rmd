@@ -13,13 +13,17 @@ library(lmerTest)
 library(dplyr)
 ```
 ```{r}
-data <- read.table ("/Users/yu/Documents/Duke/courses/19fall/IDS702.01/HW & LAB/Team Project 2/team-project-2-estrogen-bioassay-and-voting-in-nc-avengers/Data/bioassay.txt", header=T, sep=" ")
-head(data)
-dim(data)
-summary(data)
+estrogen <- read.table ("/Users/yu/Documents/Duke/courses/19fall/IDS702.01 Modeling and Representation of Data/HW & LAB/Team Project 2/team-project-2-estrogen-bioassay-and-voting-in-nc-avengers/Data/bioassay.txt", header=T, sep=" ", colClasses = c('protocol' = 'factor'))
+estrogen$uterus <- as.character(estrogen$uterus)
+estrogen$uterus <- as.numeric(estrogen$uterus)
+estrogen$weight <- as.character(estrogen$weight)
+estrogen$weight <- as.numeric(estrogen$weight)
+estrogen$group <- as.factor(estrogen$group)
+summary(estrogen)
+```
+```{r}
+hist(log(estrogen$uterus))
 
-data$uterus = as.numeric(data$uterus)
-data$weight = as.numeric(data$weight)
-data$group = as.factor(data$group)
 
 ```
+
