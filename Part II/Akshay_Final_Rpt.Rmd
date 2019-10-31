@@ -844,14 +844,6 @@ ranef(Model_5)
 anova(Model_2, Model_5) #Model_3 is better
 ```
 
-```{r Model_6}
-Model_6 <- glmer(cbind(voted_voters,total_voters-voted_voters)  ~ 
-                 (1+county_desc|sex_code)+ age + race_code + ethnic_code  + sex_code:party_cd,
-                 data = Votes_Dataset, family = binomial(link="logit"))
-
-summary(Model_5)
-```
-
 ```{r Decomposing  Votes_dataset }
 
 decomp_votes <- rep(0,0)
@@ -863,7 +855,10 @@ for (i in seq(1,dim(Votes_Dataset[, c("total_voters", "voted_voters")])[1])) {
  row_result <- list.append(ones,zeros)
  decomp_votes <- list.append(decomp_votes, row_result)
 }
+```
 
+
+```{r Predicting Model_5}
 predicted = predict(Model_5, Votes_Dataset, type= "response")
 
 pred_votes <- rep(0,0)
@@ -878,10 +873,19 @@ for (i in seq(1,length(predicted))) {
 str(decomp_votes)
 str(pred_votes)
 
-str()
 confusionMatrix(factor(decomp_votes),factor(pred_votes))
 ```
 
+```{r Model_6}
+Model_6 <- glmer(cbind(voted_voters,total_voters-voted_voters)  ~ (1|county_desc) + 
+                 sex_code + party_cd + age + race_code + ethnic_code + sex_code:party_cd+
+                 age:party_cd,
+                 data = Votes_Dataset, family = binomial)
+
+summary(Model_6)
+
+ranef(Model_6)
+```
 
 
 ### Analyzing Results
