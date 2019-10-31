@@ -24,6 +24,7 @@ library(ggpubr)
 library(kableExtra)
 library(knitr)
 library(broom)
+library(rlist)
 ```
 
 ## Reading Data
@@ -121,6 +122,11 @@ votedDataMerged$race_code = as.factor(votedDataMerged$race_code)
 votedDataMerged$ethnic_code = as.factor(votedDataMerged$ethnic_code)
 votedDataMerged$sex_code = as.factor(votedDataMerged$sex_code)
 
+# changing factor levels
+votedDataMerged$party_cd = relevel(votedDataMerged$party_cd, 'UNA')
+votedDataMerged$sex_code = relevel(votedDataMerged$sex_code, 'U')
+votedDataMerged$ethnic_code = relevel(votedDataMerged$ethnic_code, 'UN')
+votedDataMerged$race_code = relevel(votedDataMerged$race_code, 'U')
 # changing already factored variable to character and then again to factor (removing any extra factor)
 votedDataMerged$voting_method_desc = as.character(votedDataMerged$voting_method_desc)
 votedDataMerged$voting_method_desc = as.factor(votedDataMerged$voting_method_desc)
@@ -162,14 +168,14 @@ nrow(voterStatDf[voterStatDf$voted_voters > voterStatDf$total_voters,  ]) # 3023
 ```
 
 ```{r PLOTTING no of Observations for each County }
-dt = aggregate(voterStatDf$county_desc, list(voterStatDf$county_desc), length)
-colnames(dt) = c('County','NbrOfObs')
-
-ggplot(dt)+
-  geom_bar(aes(x=County, y=NbrOfObs), stat = 'identity')+
-  theme(legend.position = "none",
-        plot.title = element_text(hjust = 0.5),
-        axis.text.x = element_text(angle = 45,hjust = 1, size = 3))
+# dt = aggregate(voterStatDf$county_desc, list(voterStatDf$county_desc), length)
+# colnames(dt) = c('County','NbrOfObs')
+# 
+# ggplot(dt)+
+#   geom_bar(aes(x=County, y=NbrOfObs), stat = 'identity')+
+#   theme(legend.position = "none",
+#         plot.title = element_text(hjust = 0.5),
+#         axis.text.x = element_text(angle = 45,hjust = 1, size = 3))
 ```
 
 ```{r PLOTTING Voter Turnout for each County}
@@ -181,13 +187,13 @@ dt3 = merge(dt, dt2, by = "County")
 dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
 
 ggplot(dt3, aes(x=County))+
-  geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
-  geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.4)+
-  ggtitle("Distribution of Total Voter and Voted voters for 20 Counties") +
-  geom_text(data=dt3,aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
+  geom_bar(aes(y=percentVoted*100,fill='County'), stat = 'identity', width = 0.4)+
+  ggtitle("Voter Turnout for all Counties") +
+  geom_text(data=dt3,aes(y=percentVoted*100,label=scales::percent(percentVoted)), 
             vjust = 0.6, hjust= -0.2, angle=90, size=2.5) +
+  ylim(0,100)+
   xlab("Counties")+
-  ylab("Voter Count") +
+  ylab("Voter Turnout") +
   theme(legend.position = "none",
         plot.title = element_text(hjust = 0.5),
         axis.text.x = element_text(angle = 45,hjust = 1,size=2))
@@ -726,7 +732,7 @@ ggplot(dt3, aes(x=age))+
 
 ```
 
-## Data Change
+## Data Processing
 
 ```{r Removing Precints and Aggregating}
 
@@ -756,15 +762,15 @@ Percent_Voted = (Num_of_voted_voters*100)/Num_all_voters #68.5 %
 
 ```{r Data Processing }
 
-dim(Votes_Dataset) # 7291 (rows) 
+#dim(Votes_Dataset) # 7291 (rows) 
 #Checking rows were voted voters are more than total voters 
-nrow(Votes_Dataset[Votes_Dataset$voted_voters > Votes_Dataset$total_voters,  ]) #39
+#nrow(Votes_Dataset[Votes_Dataset$voted_voters > Votes_Dataset$total_voters,  ]) #39
 
 # Updating total-vaters in rows with voted-voters > total-voters with the value of voted-voters
 Votes_Dataset = mutate(Votes_Dataset, total_voters = ifelse(voted_voters>total_voters, voted_voters, total_voters))
 
 #Checking rows were voted voters are more than total voters after updating
-nrow(Votes_Dataset[Votes_Dataset$voted_voters > Votes_Dataset$total_voters,  ]) # 0
+#nrow(Votes_Dataset[Votes_Dataset$voted_voters > Votes_Dataset$total_voters,  ]) # 0
 ```
 
 ```{r Voter Turnout after processing}
@@ -773,25 +779,26 @@ Num_of_voted_voters <- sum(Votes_Dataset$voted_voters)   #648,649 (Voters who vo
 Percent_Voted = (Num_of_voted_voters*100)/Num_all_voters #68.48 %
 ```
 
-```{r}
-
+```{r Chi-square test}
+chi_age_party = chisq.test(Votes_Dataset$age,Votes_Dataset$party_cd) #significant / association exists
+chi_sex_party = chisq.test(Votes_Dataset$sex_code,Votes_Dataset$party_cd) # boderline p / association exists
 ```
+
+##Dataset - Votes_Dataset
 
 ## Modeling
 
-### Dataset - Votes_Dataset
-
 ```{r Model_1 Simple Logistic Regression}
 
-Model_1 <- glm(cbind(total_voters, voted_voters)~ county_desc + party_cd + age + race_code +
-                ethnic_code + sex_code, data = Votes_Dataset, family = binomial)
+Model_1 <- glm(cbind(voted_voters,total_voters-voted_voters) ~ county_desc + party_cd + 
+               age + race_code + ethnic_code + sex_code, 
+               data = Votes_Dataset, family = binomial)
 
 summary(Model_1)
-
 ```
 
 ```{r Model_2 Hierarchical Modelling with Random Intercept as County}
-Model_2 <- glmer(cbind(total_voters, voted_voters) ~ (1|county_desc) +
+Model_2 <- glmer(cbind(voted_voters,total_voters-voted_voters)  ~ (1|county_desc) +
                 party_cd + age + race_code + ethnic_code + sex_code,
                  data = Votes_Dataset, family = binomial)
 
@@ -799,23 +806,82 @@ summary(Model_2)
 ```
 
 ```{r Model_3 Random Intercept as County and slope as Gender}
-Model_3 <- glmer(cbind(total_voters, voted_voters) ~ (1+age|county_desc) + 
-                party_cd + age + race_code + ethnic_code + sex_code,
+Model_3 <- glmer(cbind(voted_voters,total_voters-voted_voters) ~  (1|county_desc) + 
+                party_cd + age + race_code + ethnic_code + sex_code +sex_code:party_cd,
                  data = Votes_Dataset, family = binomial)
 
 summary(Model_3)
-dotplot(ranef(Model_3), conVar=T)
+#dotplot(ranef(Model_3), conVar=T)
 ```
+
+```{r ANOVA Model_2 and Model_3}
+anova(Model_2, Model_3) #Model_3 is better
 ```
-```{r}
-Model_4 <- glmer(cbind(total_voters, voted_voters) ~ (1|county_desc) + 
-                party_cd + age + race_code + ethnic_code + sex_code + age:party_cd 
-                + sex_code:party_cd,
+
+
+```{r Model_4}
+Model_4 <- glmer(cbind(voted_voters,total_voters-voted_voters)  ~ (1|county_desc)+
+                 (1|party_cd)+ age + race_code + ethnic_code + sex_code + sex_code:party_cd,
                  data = Votes_Dataset, family = binomial)
 
 summary(Model_4)
-dotplot(ranef(Model_4), conVar=T)
+#ranef(Model_4)
+#dotplot(ranef(Model_4), conVar=T)
 ```
+
+
+```{r Model_5}
+Model_5 <- glmer(cbind(voted_voters,total_voters-voted_voters)  ~ (1|county_desc) + 
+                 sex_code + party_cd + age + race_code + ethnic_code + sex_code:party_cd,
+                 data = Votes_Dataset, family = binomial)
+
+summary(Model_5)
+
+ranef(Model_5)
+```
+
+```{r ANOVA Model_2 and Model_5}
+anova(Model_2, Model_5) #Model_3 is better
+```
+
+```{r Model_6}
+Model_6 <- glmer(cbind(voted_voters,total_voters-voted_voters)  ~ 
+                 (1+county_desc|sex_code)+ age + race_code + ethnic_code  + sex_code:party_cd,
+                 data = Votes_Dataset, family = binomial(link="logit"))
+
+summary(Model_5)
+```
+
+```{r Decomposing  Votes_dataset }
+
+decomp_votes <- rep(0,0)
+for (i in seq(1,dim(Votes_Dataset[, c("total_voters", "voted_voters")])[1])) {
+#for (i in seq(1,5)) {
+ ones <- (rep(1, Votes_Dataset[i, c("total_voters", "voted_voters")]$voted_voters))
+ zeros <- (rep(0, (Votes_Dataset[i, c("total_voters", "voted_voters")]$total_voters
+                   - Votes_Dataset[i, c("total_voters", "voted_voters")]$voted_voters)))
+ row_result <- list.append(ones,zeros)
+ decomp_votes <- list.append(decomp_votes, row_result)
+}
+
+predicted = predict(Model_5, Votes_Dataset, type= "response")
+
+pred_votes <- rep(0,0)
+for (i in seq(1,length(predicted))) {
+#for (i in seq(1,5)) {
+  voted_people = round(Votes_Dataset[i,'total_voters']*predicted[i],0)
+  ones <- (rep(1,voted_people))
+  zeros <- (rep(0, (Votes_Dataset[i, 'total_voters']- voted_people)))
+  pred_row_result <- list.append(ones,zeros)
+  pred_votes <- list.append(pred_votes, pred_row_result)
+}
+str(decomp_votes)
+str(pred_votes)
+
+str()
+confusionMatrix(factor(decomp_votes),factor(pred_votes))
+```
+
 
 
 ### Analyzing Results
