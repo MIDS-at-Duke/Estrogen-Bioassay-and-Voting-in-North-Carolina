@@ -6,6 +6,7 @@ output: pdf_document
 ```{r message = FALSE, echo = FALSE}
 rm(list = ls())
 library(ggplot2)
+library(ggcorrplot)
 library(lme4)
 library(readr)
 library(arm)
@@ -66,13 +67,14 @@ ZM and EE versus Group: Since groups is seperated depends on the different combi
 
 >First, we plot a histogram of the response variable- uterus weight. However, the distribution is so skewed and is not normal distribution. We try square root, cube root, and log transformation, it seems that log transformation improves the distribution most. As a result, even though it is still hard to say that the distribution of log uterus weight is normal distribution, since this is the best distribution we can get, in the following analysis, we will to use log uterus weight as our response variable.
 
-```{r message = FALSE, echo = FALSE, fig.height=2, fig.width=7}
-par(mfrow=c(1,4)) 
-hist(estrogen$uterus, col = rainbow(15))
-hist(log(estrogen$uterus), col = rainbow(15))
+```{r message = FALSE, echo = FALSE, fig.height=2.5, fig.width=4.5}
+g1 = ggplot(data = estrogen) + geom_histogram(aes(x=uterus, fill = cut(uterus, 100)), show.legend = FALSE)
+g2 = ggplot(data = estrogen) + geom_histogram(aes(x=log(uterus), fill = cut(uterus, 100)),show.legend = FALSE)
+
 #This one looks the best compared to the other transformations, use this for analysis
-hist(sqrt(estrogen$uterus), col = rainbow(15))
-hist((estrogen$uterus)^(1/3), col = rainbow(15))
+g3 = ggplot(data = estrogen) + geom_histogram(aes(x=sqrt(uterus), fill = cut(uterus, 100)), show.legend = FALSE)
+g4 = ggplot(data = estrogen) + geom_histogram(aes(x=uterus^(1/3), fill = cut(uterus, 100)), show.legend = FALSE)
+ggarrange(g1,g2,g3,g4, nrow = 2, ncol=2)
 ```
 
 >Moreover, we use plots to check the relatonship between log uterus weight with other variables. First, we take a look the difference of log uterus weight between labs. By the distribution of log uterus weight of each lab, it seems like there is some apparent difference. However, if we further seperate the data by different protocol types, in each protocol type group, each lab has similar distribution of log uterus weight.
