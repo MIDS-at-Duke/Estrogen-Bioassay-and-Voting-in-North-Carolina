@@ -1,0 +1,38 @@
+---
+title: "Stat_Project_2_Report"
+output: html_document
+---
+
+
+Summary
+
+Analysis of a bioassay examining a possible estrogen agonist and antagonist. The agonist, Ethinylestradiol or EE, was confirmed in this analysis to have estrogen-like effects on the weight of the rat uterus. Additionally, ZM, a potential estrogen antagonist, was shown to possibly reduce the estrogenic effects of EE. However, without proper controls in the study, ZM may also operate on another mechanism of action than the one proposed here. 
+
+Introduction
+
+Estrogen is an important hormone in mammals which controls numerous primary and secondary sex characteristics in the organism. Estrogen agonists and antagonists are classes of compounds which act on the estrogen receptor in place of estrogen to either activate or inhibit the receptor. In this study, several experiments were carried out to determine if the potential estrogen agonist Ethinylestradiol, or EE, had similar effects to estrogen on estrogen-free female rat uteruses. Additionally, the effects of a potential estrogen antagonist, ZM, were also examined in the study. Data from this project was then used to construct a model to determine if EE and ZM had estrogen agonistic or antagonistic effects on the rat uterus.
+
+Results
+
+There were four independent variables, a single hierarchical variable, and two interaction terms which was included in the model which were significant at predicting the weight of the rat uterus.
+
+EE was a significant predictor of the weight of the uterus; for each 1 mg dose of EE, the uterus weight is expected to increase by 0.154 mg. The absolute t-value for this effect is 32.74, indicating this effect is significant at predicting uterus weight. This indicates that treating an estrogen free mouse with EE results in an increase in uterus weight.
+
+For the independent variable ZM, for each mg dose of the estrogen antagonist, the expected weight of the uterus decreases by 0.20 mg. The absolute t-value of this effect is 4.38, which is lower than EE but still significant at predicting the weight of the uterus. This indicates that the estrogen antagonist does have a negative effect on uterus weight. 
+
+For each gram of weight increase in the rat, the weight of the uterus increased by . However, the absolute t-value of this variable is not large, and so is not likely to be a significant variable in this analysis.
+
+For the random effects, each lab contained a different random intercept. The outliers were . These results indicate the laboratory has an effect on the final weight of the uterus.
+
+
+The four protocols each had a significant effect on the weight of the uterus, with protocols C and D having an increased effect of as compared to A and B effect of
+
+For the interaction terms, the interactions between the protocols and ZM and EE were significant. Of particular interest is the difference in the interaction term between ZM and protocol B versus the interaction term between EE and protocol B. The difference in these interaction terms is larger than the other protocol interaction terms, indicating protocol B is the most sensitive protocol for determining the difference in effects between ZM and EE.
+
+Conclusion
+
+From this assay, EE can be confirmed as having an estrogenic agonist effect on the weight of the rat uterus. ZM was also confirmed as having a possible estrogenic antagonistic effect counter to the agonistic effect of EE. However, a limitation of this study and data in this form is that there are no controls for ZM. ZM may have other effects besides being an estrogen antagonist that could have produced these same results. To account for this, a further study should be done that treats these same types of estrogen-free rats only with ZM. If the uterus does not decrease in size, this could be evidence that ZM is an estrogen antagonist. However, if the uterus decreases in size even in the absence of estrogen or EE, this could be evidence that there is another biological effect at work besides the one proposed.
+
+Additionally from these results, the laboratories differed in their estimated intercepts. This does not invalidate the results, however, as this is expected with biological replicates and most laboratories are near each other in intercepts, with the notable outliers of 
+
+From the results, protocol B appears to be the most effective protocol for detecting the effects of EE and ZM.
