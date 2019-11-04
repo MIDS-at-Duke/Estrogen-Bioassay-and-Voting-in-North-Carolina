@@ -22,6 +22,7 @@ library(tidyverse)
 
 ```{r message = FALSE, echo = FALSE}
 estrogen <- read.table('/Users/yu/Documents/Duke/courses/19fall/IDS702.01 Modeling and Representation of Data/HW & LAB/Team Project 2/team-project-2-estrogen-bioassay-and-voting-in-nc-avengers/Data/bioassay.txt', header=T, sep=" ", colClasses = c('protocol' = 'factor'))
+#estrogen[estrogen$uterus == '.',]
 estrogen[estrogen$uterus == '.',]$uterus = NA
 estrogen[estrogen$weight == '.',]$weight = NA
 
@@ -54,7 +55,7 @@ estrogen$mature <- as.factor(estrogen$mature)
 ## General:
 >Data used in this analysis containing 2681 observations from different labs, 
 conducting the research whether the estrogen level would effect the weight of the uterus of the rats or not.
-From taking a quick look to the data set, We noticed that there are 4 rows missing uterus weight values and 2 of them even missing weight values. Since data without response variable cannot be used to fit the model, we decided to delete these four rows.
+From taking a quick look to the data set, We noticed that there are 4 rows missing uterus weight values and 2 of them even missing weight values. Since these missing rows are occured rondomly,which means these rows are in different group, protocol type, and lab. Therefore, we decided to delete these four rows.
 
 >For the variables in the data set, we treat uterus, weight, EE, ZM as numeric variables and protocal, lab, group as categorical variables.
 Though in the research, there are only 3 kinds of dosage of ZM and 7 kinds of dosage of EE, we still treat them as numerical variables because if we treat them as categorical variables, we would lose information between different dosage. For example, 10 dose is 10 times of 2 dose.
@@ -67,7 +68,7 @@ ZM and EE versus Group: Since groups is seperated depends on the different combi
 
 >First, we plot a histogram of the response variable- uterus weight. However, the distribution is so skewed and is not normal distribution. We try square root, cube root, and log transformation, it seems that log transformation improves the distribution most. As a result, even though it is still hard to say that the distribution of log uterus weight is normal distribution, since this is the best distribution we can get, in the following analysis, we will to use log uterus weight as our response variable.
 
-```{r message = FALSE, echo = FALSE, fig.height=2.5, fig.width=4.5}
+```{r message = FALSE, echo = FALSE, fig.height=2.5, fig.width=4.5, fig.align="center"}
 g1 = ggplot(data = estrogen) + geom_histogram(aes(x=uterus, fill = cut(uterus, 100)), show.legend = FALSE)
 g2 = ggplot(data = estrogen) + geom_histogram(aes(x=log(uterus), fill = cut(uterus, 100)),show.legend = FALSE)
 
@@ -83,7 +84,7 @@ This difference we observed is caused by the fact that not all lab conduct exper
 >All these observations indicates that different protocol types would have different log uterus distributions. Therefore, we try to plot the relationship between log uterus weight with each variable by different protocol types. We find that when comparing log uterus weight and mean centered weight, the mature rats have a negative pattern, the immature rats do not appear to have a pattern. For the different dosage of ZM and EE, there appears to be a positive relationship between log uterus weight and ZM and a negative relationship between log uterus weight and EE. Lastly, we notice that different group of rats have different distribution of log uterus weights. However, since grouping is based on the dosage of ZM and EE and we are interested in the effect of ZM and EE, we will only include ZM and EE in our model and excluded group variable.
 
 
-```{r message = FALSE, echo = FALSE, fig.height=5, fig.width=7}
+```{r message = FALSE, echo = FALSE, fig.height=5, fig.width=7, fig.align="center"}
 p1 = ggplot(data = estrogen, aes(x=lab, y=log(uterus))) + geom_point(alpha = .5 , color = 'blue') + geom_smooth(method= 'lm' ,col= 'red3') + theme(axis.text.x = element_text(angle = 90))
 #See differences in labs, but this could be due to some do not do certain protocols. Need to build the model to check
 
