@@ -1,0 +1,249 @@
+---
+title: "Estrogen Bioassay"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r s, inlcude = FALSE}
+library(ggplot2)
+library(lme4)
+library(readr)
+library(arm)
+library(car)
+library(e1071)
+library(caret)
+library(pROC)
+```
+
+```{r setup, include = FALSE}
+
+estrogen <- read.table('bioassay.txt', header=T, sep=" ", colClasses = c('protocol' = 'factor'))
+
+#convert factors to numeric
+estrogen$uterus <- as.character(estrogen$uterus)
+estrogen$uterus <- as.numeric(estrogen$uterus)
+estrogen$weight <- as.character(estrogen$weight)
+estrogen$weight <- as.numeric(estrogen$weight)
+estrogen$group <- as.factor(estrogen$group)
+#remove empty data
+estrogen <- na.omit(estrogen)
+#need to mean center weight
+estrogen$mweight <- estrogen$weight - mean(estrogen$weight)
+
+# added another binary variable to distinguish between mature and inmature rats
+estrogen$mature <- 1
+estrogen$mature[estrogen$protocol == 'A' | estrogen$protocol == 'B' ] <- 0
+estrogen$mature <- as.factor(estrogen$mature)
+
+summary(estrogen)
+```
+
+
+```{r EDA, include = FALSE}
+# check the distribution of the response variable
+hist(estrogen$uterus)
+hist(log(estrogen$uterus))
+#Log looks the best compared to the other transformations, use this for analysis
+hist(sqrt(estrogen$uterus))
+hist((estrogen$uterus)^(1/3))
+```
+
+
+```{r EDA2, include = FALSE}
+
+ggplot(data = estrogen, aes(x=mweight, y=log(uterus))) + geom_point(alpha = .5 , color = 'blue') + geom_smooth(method= 'lm' ,col= 'red3') + facet_wrap(~protocol, ncol = 3)
+#the mature rats have a negative pattern, the immature rats do not appear to have a pattern
+
+ggplot(data = estrogen, aes(x=EE, y=log(uterus))) + geom_point(alpha = .5 , color = 'blue') + geom_smooth(method= 'lm' ,col= 'red3') + facet_wrap(~protocol, ncol = 3)
+#There appears to be a positive relationship between EE and log uterus weight
+
+ggplot(data = estrogen, aes(x=ZM, y=log(uterus))) + geom_point(alpha = .5 , color = 'blue') + geom_smooth(method= 'lm' ,col= 'red3') + facet_wrap(~protocol, ncol = 3)
+#There appears to be a negative relationship between ZM and uterus weight
+
+ggplot(data = estrogen, aes(x=lab, y=log(uterus))) + geom_point(alpha = .5 , color = 'blue') + geom_smooth(method= 'lm' ,col= 'red3') + facet_wrap(~protocol, ncol = 3) + theme(axis.text.x = element_text(angle = 90))
+#It appears that labs doing similar experiments have similar outcomes
+
+ggplot(data = estrogen, aes(x=lab, y=log(uterus))) + geom_point(alpha = .5 , color = 'blue') + geom_smooth(method= 'lm' ,col= 'red3') + theme(axis.text.x = element_text(angle = 90))
+#See differences in labs, but this could be due to some do not do certain protocols. Need to build the model to check
+
+ggplot(data = estrogen, aes(x=group, y=log(uterus))) + geom_point(alpha = .5 , color = 'blue') + geom_smooth(method= 'lm' ,col= 'red3') + facet_wrap(~protocol, ncol = 3)
+#replicate groups are different because each replicate group was given a different dose of EE and ZM
+
+ggplot(data = estrogen, aes(x=group, y=log(uterus))) + geom_point(alpha = .5 , color = 'blue') + geom_smooth(method= 'lm' ,col= 'red3')
+#Between all protocols the groups show similar trends of more EE leads to higher uterus weight. Interaction between EE and ZM may be significant
+
+ggplot(data = estrogen, aes(x=protocol, y=log(uterus))) + geom_point(alpha = .5 , color = 'blue') + geom_smooth(method= 'lm' ,col= 'red3')
+#Difference in weight, but expected since the age of the rats differed in the protocols
+
+plot(log(uterus)~mweight, data = estrogen)
+# very obvious clustering of mature and inmature rats
+```
+
+
+```{r modeling1, include = FALSE}
+partial_estrogen_model1 <- lmer(log(uterus)~ mweight + EE + ZM + (1 | lab) + (1| protocol), data = estrogen)
+summary(partial_estrogen_model1)
+#ranef(partial_estrogen_model1)
+#T values for these are large, and therefore the model is acceptable
+car::vif(partial_estrogen_model1)
+AIC(partial_estrogen_model1)
+BIC(partial_estrogen_model1)
+
+# weight is not very significant 
+```
+
+```{r modeling2, include = FALSE}
+
+# created mature and replace weight to mature and adding level for protocol, qq plot not improving
+two_level_estrogen_model <- lmer(log(uterus)~ EE + ZM + mature + (1| protocol) + (1 | lab), data = estrogen)
+summary(two_level_estrogen_model)
+car::vif(two_level_estrogen_model)
+AIC(two_level_estrogen_model)
+BIC(two_level_estrogen_model)
+
+# tried to log weight
+logx_estrogen_model <- lmer(log(uterus)~ log(mweight) + EE + ZM + (1 | protocol) + (1 | lab), data = estrogen)
+summary(logx_estrogen_model)
+AIC(logx_estrogen_model)
+BIC(logx_estrogen_model)
+
+# then for answering sensitivity of each protocol in detecting EE and ZM levels, we tried to add EE and ZM random slope effect
+two_level_estrogen_model1 <- lmer(log(uterus)~ EE + ZM + mature + (1+EE+ZM| protocol) + (1 | lab), data = estrogen)
+# converging issue here!!! NEED TO CHANGE
+```
+
+
+```{r modeling3, include = FALSE}
+# because converge issue, add protocal as a normal predictor and added two interaction terms to see the sensitivity based on Protocol A as the baseline. Assuming baseline A has no sensitivity. 
+full_estrogen_model <- lmer(log(uterus)~EE + ZM + protocol + (1 | lab) + EE:protocol + ZM:protocol, data = estrogen)
+
+
+#adding group in because it is an indicator of the biological (maybe) interaction between EE and ZM that cannot be captured by including the interaction term of EE and ZM
+summary(full_estrogen_model)
+ranef(full_estrogen_model)
+AIC(full_estrogen_model)
+BIC(full_estrogen_model)
+car::vif(full_estrogen_model)
+qqnorm(residuals(full_estrogen_model));qqline(residuals(full_estrogen_model))
+#Including protocol means weight now has a lower t value, therefore dropping weight for next model
+```
+
+
+
+```{r include = FALSE,echo = FALSE}
+
+plot(full_estrogen_model)
+#equal variance is violated, they are not scattered around 0
+#Linearity is violated, there are downward trends in the second half of the graph
+
+# resid_full <- resid(full_estrogen_model)
+# plot(estrogen$mweight, resid_full)
+# plot(estrogen$EE, resid_full)
+# #We are underfitting for 1mg dose and overfitting for 10 mg dose
+# plot(estrogen$ZM, resid_full)
+# plot(estrogen$protocol, resid_full)
+# plot(estrogen$group, resid_full)
+
+qqnorm(residuals(full_estrogen_model));qqline(residuals(full_estrogen_model))
+# not very good 
+
+
+```
+
+**Summary**
+
+Analysis of a bioassay examining a possible estrogen agonist and antagonist. The agonist, Ethinylestradiol or EE, was confirmed in this analysis to have estrogen-like effects on the weight of the rat uterus. Additionally, ZM, a potential estrogen antagonist, was shown to possibly reduce the estrogenic effects of EE. However, without proper controls in the study, ZM may also operate on another mechanism of action than the one proposed here. 
+
+**Introduction**
+
+Estrogen is an important hormone in mammals which controls numerous primary and secondary sex characteristics in the organism. Estrogen agonists and antagonists are classes of compounds which act on the estrogen receptor in place of estrogen to either activate or inhibit the receptor. In this study, several experiments were carried out to determine if the potential estrogen agonist Ethinylestradiol, or EE, had similar effects to estrogen on estrogen-free female rat uteruses. Additionally, the effects of a potential estrogen antagonist, ZM, were also examined in the study. Data from this project was then used to construct a model to determine if EE and ZM had estrogen agonistic or antagonistic effects on the rat uterus.
+
+**Data**
+
+Data used in this analysis contained 2681 observations from different labs 
+conducting research on whether the estrogen level would affect the weight of the uterus of rats.
+A cursory investigation of the data revealed there were 4 rows missing uterus weight values and 2 of rows missing weight values. Since these missing rows occurred randomly, which means these rows are in different groups, protocol types, or labs. Therefore, these four rows were deleted.
+
+For the variables in the data set, uterus, weight, EE, ZM were treated as numeric variables and protocal, lab, group were treated as categorical variables.
+In the research, there are only 3 kinds of dosage of ZM and 7 kinds of dosage of EE, however they were still treated as numerical variables because if treated as categorical variables, information would be lost between different dosages. For example, a 10 mg dose is 10 times a 1 mg dose. This information would be lost in a categorical variable.
+Another variable was added to the dataset, a new binary variable- mature, based on the value of protocol, to indicate whether the rats were mature. If the rat was categorized as protocol A or B, it would have value 0, and if the rat was categorized as protocol C or D, it would have value 1.
+
+**EDA**
+For the data set used, collinearity was investigated as the data was explored.
+Mature versus Protocol: Since mature is the new variable created based on protocol types, there is high collinearity between them.
+ZM and EE versus Group: Since groups is seperated depends on the different combination of dosage of ZM and EE, they are highly correlated with each other.
+
+First, a histogram was plotted of the response variable- uterus weight. However, the distribution is skewed and is not a normal distribution. Out of the transformations square root, cube root, and log transformation, it seems that log transformation improves the distribution the most. As a result, even though it is still hard to say that the distribution of log uterus weight is a normal distribution, in the following analysis, log uterus weight was used as the response variable.
+
+```{r message = FALSE, echo = FALSE, fig.height=2.5, fig.width=4.5, fig.align="center"}
+g1 = ggplot(data = estrogen) + geom_histogram(aes(x=uterus, fill = cut(uterus, 100)), show.legend = FALSE)
+g2 = ggplot(data = estrogen) + geom_histogram(aes(x=log(uterus), fill = cut(uterus, 100)),show.legend = FALSE)
+
+#This one looks the best compared to the other transformations, use this for analysis
+g3 = ggplot(data = estrogen) + geom_histogram(aes(x=sqrt(uterus), fill = cut(uterus, 100)), show.legend = FALSE)
+g4 = ggplot(data = estrogen) + geom_histogram(aes(x=uterus^(1/3), fill = cut(uterus, 100)), show.legend = FALSE)
+ggarrange(g1,g2,g3,g4, nrow = 2, ncol=2)
+```
+
+Moreover, plots were used to check the relatonship between log uterus weight with other variables. First, the difference of log uterus weight between labs was examined. By the distribution of log uterus weight of each lab, there appeared to be some differences. However, the data is further separated by different protocol types, in each protocol type group, each lab has a similar distribution of log uterus weight.
+This difference observed is caused by the fact that not all labs conduct experiment for every protocol type. Moreover, an apparent pattern seemed to indicate that the data points were clustered by group when plotting for log uterus weight and mean centered weight. There are four clusters in the plot. For the relation between log uterus rate and protocol, rates categorized as protocols C or D apparently have higher log uterus weight comparing to protocols A or B. 
+
+All these observations indicate that different protocol types would have different log uterus distributions. Therefore, a plot was made to examine the relationship between log uterus weight with each variable by different protocol types. This indicated that when comparing log uterus weight and mean centered weight, the mature rats have a negative pattern, while the immature rats do not appear to have a pattern. For the different dosages of ZM and EE, there appears to be a positive relationship between log uterus weight and ZM and a negative relationship between log uterus weight and EE. Lastly, it appeared that different groups of rats had different distribution of log uterus weights. However, since grouping is based on the dosage of ZM and EE and the experiment is concerned with studying the effect of ZM and EE, only include ZM and EE will be included in the final model and the group variable will be excluded.
+
+**Model Selection Process**
+
+From EDA, it was observed there are only 3 different doses for ZM and around 9 different doses for EE. At first EE and ZM were treated as categorical variables, however this was later changed to continuous as the problem of making them into categorical variable would result in loss of information since 1 mg is not only different from 10 mg, it is 1/10 of 10 milligrams. 
+
+The first model constructed:
+$$\begin{aligned}
+Log (Uterus)= & (B_0 + \gamma_{lab} + \eta_{protocal}  ) + B_1EE + B_2ZM + B_3MWeight + \varepsilon_{ijk} \\
+\end{aligned}$$
+
+The AIC for this model was 3314, and BIC was 3356. It was expected that both scores would be smaller for our final model. Mean centered weight was not very significant with a -0.72 t-value but the protocal variable does contain information of the weight of the rat. There does not appear to be a multicollinearity issue in the model by checking the VIF scores, but the normality assumption seems to be violated from the qq-plot. It seems that weight cannot distinguish mature vs inmature rats specified in the protocols. Instead of including the weight, another binary variable was created indicating either mature or immature rats. Because protocols A and B were done on immature rats, and protocls C and D were done on mature rats, the mature variable could help identify this difference between the two sets of protocols. The mature variable had a t-value of 40.33, and therefore seems to be a very significant predictor of uterus weight. However the normality issue was still not solved. Ignoring normality at this time, random slopes based on the protocols were created to test the sensitivity of different protocols detecting the effects ZM or EE. However, the model had a convergence issue. Due to this issue, protocol was instead included as a normal predictor instead of a level predictor. Instead, interaction terms between protocol and EE and protocol and ZM were added to see the sensivity of the protocols in detecting ZM or EE as compared to the base protocol A. Weight was then added back into the model in hopes of distinguishing between the mature vs immature rats. However, mean centered weight was not very significant in the model and also caused a multicollinearity issue between weight and protocol. Weight was not included in the final model. 
+
+
+**Model**
+
+The final model:
+$$\begin{aligned}
+Log (Uterus)= & (B_0 + \gamma_{lab} ) + B_1EE + B_2ZM  + B_3Protocal + B_4Protocol*EE + B_5Protocol*ZM + \varepsilon_{ijk} \\
+\end{aligned}$$
+
+Model assumptions were examined by plotting residual vs fitted and qq-plot. As above, the model does not satisify the normality assumption. There appears to be clustering in the residual plot, because the model cannot distinguish mature vs inmature rats, while also the variances are not very constant for the clusters. 
+
+**Need to say if linearity and equal variance are violated or not**
+
+```{r final_model, echo = FALSE, fig.width =3, fig.height =3, fig.align='center', fig.show='hold'}
+qqnorm(residuals(full_estrogen_model));qqline(residuals(full_estrogen_model))
+plot(full_estrogen_model)
+```
+
+The group variable was also added into the model as an extra predictor variable in the model. This appeared to fix the normality issues. However, by adding the group variable, the model loses information on EE and ZM and the interpretation would not make sense to say different groups of rats can have different impacts. Multicollinearity was also examined in the final model, and the VIF scores for each predictor in our final model were all between 2.6 to 5.6, indicating some multicollinearity but not enough to cause an issue for our interpretation. This is the best model considering all the questions asked of this data. The AIC score for this model is 3228 and BIC is 3310, which is lower than the first model above. 
+
+```{r}
+summary(full_estrogen_model)
+ranef(full_estrogen_model)
+```
+**Results**
+
+There are three independent variables, a single hierarchical variable, and two interaction terms included in the model which are significant at predicting the weight of the rat uterus.
+
+EE is a significant predictor of the weight of the uterus; for each 1 mg dose of EE, the log uterus weight is expected to increase by 0.154. The absolute t-value for this effect is 32.74, indicating this effect is significant at predicting uterus weight. This indicates that treating an estrogen free mouse with EE results in an increase in uterus weight.
+
+For the independent variable ZM, for each mg dose of the estrogen antagonist, the expected log weight of the uterus decreases by 0.20. The absolute t-value of this effect is 4.38, which is lower than EE but still significant at predicting the weight of the uterus. This indicates that the estrogen antagonist does have a negative effect on uterus weight. However, without proper controls as discussed in the conclusion, this study cannot conclusively say that this result is due to an estrogen antagonist effect.
+
+For the random effects, each lab contained a different random intercept. The highest and lowest outliers were Chungkor and Poulenc labs, respectively at 0.337 and -0.330 intercepts. These results indicate the laboratory does have an effect on the final weight of the uterus. However, these laboratory differences are acceptable and ultimately do not negatively impact the results of the study. Possible explanations for these variations could be skill of the rat handlers, different feed stock across laboratories, different stress levels for the rats, or other unkown effects. 
+
+The four protocols each had a significant effect on the weight of the uterus, with protocols C and D having an increased effect of as compared to A and B. Using protocol A as the baseline, protocol B had an effect of increasing the log uterus weight of the rats by 0.116 with a t-value at 4.26. Protocols C and D had much higher effects, at 1.355 and 1.356 at t-values 44.46 and 34.31, respectively. This indicates protocols C and D had very significant effects on log uterus weight as compared to protocol A.
+
+For the interaction terms, the interactions between the protocols and ZM and EE were significant. Of particular interest is the difference in the interaction term between ZM and protocol B versus the interaction term between EE and protocol B. The difference between these interaction terms, at 0.63, is larger than the other protocol interaction terms, indicating protocol B is the most sensitive protocol for determining the difference in effects between ZM and EE.
+
+**Conclusion**
+
+From these results, this study can conclude that EE has a positive effect on uterus weight while ZM has a negative effect on uterus weight. The different laboratories all have an effect on uterus weight, however this does not interfere with the overall conclusions of the study. Protocol B is the most effective protocol for determining the difference in EE and ZM effects.
+
+For further research, the point of this study was to see the effects of an estrogen agonist, EE, on uterus weight and to see the effects of a uterus antagonist, ZM, on uterus weight. However, there were no controls for ZM as compared to EE.Therefore, from this study alone, ZM cannot be said to have an estrogen antagonistic effect. Without including a control ZM without EE, the actual mechanics of ZM on uterus weight cannot be determined. A further control group with ZM and without EE could determine if ZM is actually an estrogen antagonist, as expected, or is instead working by another mechanism on the uterus, such as a testosterone analog. The expectation of the estrogen antagonist is that, in the absence of all estrogen or estrogen analogs, there would be no decrease in uterus weight- only in the presence of EE would ZM show a reduction in uterus weight. If ZM were acting by another mechanism, then it would have a negative effect on uterus weight even in the absence of EE. Additional followups could investigate why there were differences in the laboratories' intercepts.
+
+
+
