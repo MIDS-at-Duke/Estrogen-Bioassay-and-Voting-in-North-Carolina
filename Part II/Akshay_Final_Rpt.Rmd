@@ -1,7 +1,7 @@
 ---
-title: "Team_Project_Part_II_Akshay"
-author: "Akshay Punwatkar"
-date: "10/29/2019"
+title: "Analysis of Voting in NC (2016 General Elections)"
+author: "Akshay Punwatkar, Melody(Xinwen) Li, Derek Wales, Andrew Patterson, Tzu-Chun (Angela)"
+date: "11/04/2019"
 output: pdf_document
 ---
 
@@ -25,11 +25,56 @@ library(kableExtra)
 library(knitr)
 library(broom)
 library(rlist)
+library(rstan)
+library(brms)
+library(sjPlot)
 ```
 
-## Reading Data
+# SUMMARY
 
-```{r Reading Data, message= FALSE}
+Analysis and modeling of the voter registration and participation data from the 2016 US General election for the state of North Carolina were performed. And the effects of the demographics on the voter turnout were analyzed and quantified. The analysis was preceded by several data processing steps and was performed on a subset of the data for 20 Counties within North Carolina. Voter turnout based on different genders, ethnicity, race, age groups, and party affiliations were analyzed. A Multilevel/Hierarchical logistic regression model used to quantify the effects of demographics on voter turnout.  
+ 
+# INTRODUCTION  
+
+United States General Elections in 2016 was one of the most anticipated election. The election saw an average turnout of about 63%, which was reported as the lowest turnout in the past 20 years. Voter turnout is assumed to be affected by several demographic factors such as gender, age, race, ethnicity, county, and party affiliation. Other factors, such as the election campaign, accessibility to voting booths, and many more, also affects the turnout. The following analysis is aimed at analyzing and quantifying the effects of such demographic factors in determining the voter turnout. The scope of the analysis is limited to the state of North Carolina.  
+The North Carolina State Board of Elections (NCSBE) is the agency charged with the administration and the election process and campaign finance disclosure and compliance for the state. They are also required to keep extensive records to ensure electoral compliance, as part of their duties, they also keep information on likely voters and registered voters. Using the data obtained from NCSBE, the analysis was done primarily to gain insights about regarding a few questions :
+
++ How did demographic subgroups vote in 2016? 
++ Did the overall probability or odds of voting differ by county in 2016?
++ How did the turnout rates differ between females and males for the different party affiliations?
+
+# DATA 
+
+Dataset obtained from NCSBE contained demographic related information about the registered voters and voters who voted from 102 counties in North Carolina. Since the data was provided in two parts, extensive pre-processing of the data was performed. Overall, voter turnout as per the provided data was ~ 72.0 %, and it was made sure throughout the data processing process that the turnout occurs in a similar range. 
+
+## Data Processing and Transformation : 
+
+The registered voter dataset, initially containing duplicates and null observations were processed to obtain the unique observations without any null values (0.2 % observations were null). Similarly, the voted voters dataset was processed to remove any null values (4.0 % observations were null). Subsequently, both the datasets were merged based on the demographics.    
+
+However, due to the variation in the methods used for voting or change in party affiliation, the voted dataset had multiple observations for the same demographics as in the registered voter's dataset. In order to eliminate redundancy of the total registered voter post merging, data were aggregated based on the demographics and total voters. In the process, few of the features, such as the voting method and voting method description, were dropped. Few more  
+
+* Since only a fraction of the population changed their party affiliations during voting, **party_cd** (original party affiliation) was used in the final dataset instead of **voted_party_cd**. Also, **voted_party_cd** was leading to duplication of total_registered voters.  
+
+* Few observations (0.84%) had **more voted voters than the registered voters** for a demographic. It could be explained by assuming that the voters might have changed their county/precinct and hence having the same demographic voted under different precincts. For such cases, the count of total registered voters was increased to match the voted voters, because eliminating such observations would have led to information loss for the entire demographic.  
+
+* **Precinct** and **voter district** was dropped from the final dataset. And the data was again aggregated based on the demographics. 
+
+## Data Description :  
+
+The data dictionary used as part of the final analysis is as follows:
+
+> **county_desc  ** - *Name of the County of the voters belonging to a demographic group*    
+> **age          ** - *Age group of the voters belonging to a demographic group*     
+> **race         ** - *Race of the voters belonging to a demographic group*     
+> **ethnicity    ** - *Enthnicity of the voters belonging to a demographic group*     
+> **sex_code     ** - *Gender of the voters belonging to a demographic group*     
+> **party_cd     ** - *Party affiliation of the voters belonging to a demographic group*     
+> **total_voters ** - *Number of registered voters belonging to a demographic group*       
+> **voted_voters ** - *Number of voters who voted belonging to a demographic group*        
+
+*Features not used in the final dataset are not mentioned in the dictionary*   
+
+```{r Reading Data, warning=FALSE,message= FALSE}
 #Reading file with data for all the voters
 all_voter = read.csv("/Users/akshaypunwatkar/TeamProject2/team-project-2-estrogen-bioassay-and-voting-in-nc-avengers/Data/voter_stats_20161108.txt", 
                      header = TRUE, comment.char = "",sep='', stringsAsFactors = F)
@@ -86,29 +131,23 @@ voted_v_noNA <- voted_voter %>%
 ```
 
 ```{r Voter Turnout After Cleaning}
-
 Num_all_voters <- sum(all_v_noNA$total_voters, na.rm = T)  #6,210,364  (Total voters)
 Num_of_voted_voters <- sum(voted_v_noNA$voted_voters)      #4,572,359  (Voters who voted)
 Percent_Voted = (Num_of_voted_voters*100)/Num_all_voters   #73.62 % Voters Voted
-
 ```
-
-## Merging
 
 ```{r MERGING the two dataset, warning=FALSE}
 votedDataMerged = voted_v_noNA %>% 
-                    inner_join (all_v_noNA, 
+                      inner_join (all_v_noNA, 
                                 by = c("county_desc" , "precinct_abbrv", "vtd_abbrv", 
                                         "party_cd", "race_code","ethnic_code","sex_code",       
                                          "age"))
 #nrows in votedDataMerged 626,544
-
 #removing noNA dataframes (not required anymore)
 rm(voted_v_noNA,all_v_noNA)
 
 #dropping voting_method column (same as voting_method_desc)
 votedDataMerged$voting_method <- NULL
-
 ```
 
 ```{r Data Processing of merged dataset}
@@ -127,6 +166,7 @@ votedDataMerged$party_cd = relevel(votedDataMerged$party_cd, 'UNA')
 votedDataMerged$sex_code = relevel(votedDataMerged$sex_code, 'U')
 votedDataMerged$ethnic_code = relevel(votedDataMerged$ethnic_code, 'UN')
 votedDataMerged$race_code = relevel(votedDataMerged$race_code, 'U')
+
 # changing already factored variable to character and then again to factor (removing any extra factor)
 votedDataMerged$voting_method_desc = as.character(votedDataMerged$voting_method_desc)
 votedDataMerged$voting_method_desc = as.factor(votedDataMerged$voting_method_desc)
@@ -161,13 +201,13 @@ Percent_Voted = (Num_of_voted_voters*100)/Num_all_voters    #67.52% Voters Voted
 
 ```{r Checking Voted > Total}
 ## in voter data merged dataframe
-nrow(votedDataMerged[votedDataMerged$voted_voters > votedDataMerged$total_voters,  ]) # 622 (0.1%)
+#nrow(votedDataMerged[votedDataMerged$voted_voters > votedDataMerged$total_voters,  ]) # 622 (0.1%)
 
 ## in Voter stats dataframe
-nrow(voterStatDf[voterStatDf$voted_voters > voterStatDf$total_voters,  ]) # 3023 (0.84%)
+#nrow(voterStatDf[voterStatDf$voted_voters > voterStatDf$total_voters,  ]) # 3023 (0.84%)
 ```
 
-```{r PLOTTING no of Observations for each County }
+```{r PLOTTING no of Observations for each County (NR), include=FALSE }
 # dt = aggregate(voterStatDf$county_desc, list(voterStatDf$county_desc), length)
 # colnames(dt) = c('County','NbrOfObs')
 # 
@@ -178,50 +218,47 @@ nrow(voterStatDf[voterStatDf$voted_voters > voterStatDf$total_voters,  ]) # 3023
 #         axis.text.x = element_text(angle = 45,hjust = 1, size = 3))
 ```
 
-```{r PLOTTING Voter Turnout for each County}
-dt = aggregate(voterStatDf$total_voters, list(voterStatDf$county_desc), sum)
-colnames(dt) = c('County','NbrOfTotalVoters')
-dt2 = aggregate(voterStatDf$voted_voters, list(voterStatDf$county_desc), sum)
-colnames(dt2) = c('County','NbrOfVotedVoters')
-dt3 = merge(dt, dt2, by = "County")
-dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
-
-ggplot(dt3, aes(x=County))+
-  geom_bar(aes(y=percentVoted*100,fill='County'), stat = 'identity', width = 0.4)+
-  ggtitle("Voter Turnout for all Counties") +
-  geom_text(data=dt3,aes(y=percentVoted*100,label=scales::percent(percentVoted)), 
-            vjust = 0.6, hjust= -0.2, angle=90, size=2.5) +
-  ylim(0,100)+
-  xlab("Counties")+
-  ylab("Voter Turnout") +
-  theme(legend.position = "none",
-        plot.title = element_text(hjust = 0.5),
-        axis.text.x = element_text(angle = 45,hjust = 1,size=2))
+```{r PLOTTING Voter Turnout for each County (NR), include=FALSE}
+# dt = aggregate(voterStatDf$total_voters, list(voterStatDf$county_desc), sum)
+# colnames(dt) = c('County','NbrOfTotalVoters')
+# dt2 = aggregate(voterStatDf$voted_voters, list(voterStatDf$county_desc), sum)
+# colnames(dt2) = c('County','NbrOfVotedVoters')
+# dt3 = merge(dt, dt2, by = "County")
+# dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
+# 
+# ggplot(dt3, aes(x=County))+
+#   geom_bar(aes(y=percentVoted*100,fill='County'), stat = 'identity', width = 0.4)+
+#   ggtitle("Voter Turnout for all Counties") +
+#   geom_text(data=dt3,aes(y=percentVoted*100,label=scales::percent(percentVoted)), 
+#             vjust = 0.6, hjust= -0.2, angle=90, size=2.5) +
+#   ylim(0,100)+
+#   xlab("Counties")+
+#   ylab("Voter Turnout") +
+#   theme(legend.position = "none",
+#         plot.title = element_text(hjust = 0.5),
+#         axis.text.x = element_text(angle = 45,hjust = 1,size=2))
 ```
 
-## Sampling
+## Data Selection :
+
+Voting data about 20 Counties was randomly selected from the primary dataset for the final analysis. 
 
 ```{r Selecting 20 Counties at Random}
 set.seed(98)
 counties = sample(as.character(unique(votedDataMerged$county_desc)), size = 20,replace = T)
 
-#Couting number of observations of 20 selected counties 
-
 #print(counties)
-
 # [1] "BERTIE"     "CALDWELL"   "FRANKLIN"   "DARE"      
 # [5] "HARNETT"    "JONES"      "CHATHAM"    "SWAIN"     
 # [9] "PAMLICO"    "BUNCOMBE"   "CHEROKEE"   "MCDOWELL"  
 # [13] "STOKES"     "PITT"       "NASH"       "SURRY"     
 # [17] "WARREN"     "TYRRELL"    "LENOIR"     "CUMBERLAND"
-
 ```
 
 ```{r Sampling data for 20 Counties}
 #Subsetting data for 20 counties from merged and stats table
 voting_dataset = subset(votedDataMerged, county_desc %in% counties)
 voting_stats_dataset = subset(voterStatDf, county_desc %in% counties)
-
 #Dropping merged dataset
 #rm(voterStatDf)
 #rm(votedDataMerged)
@@ -233,25 +270,34 @@ Num_of_voted_voters <- sum(voting_stats_dataset$voted_voters)   #648,649  (Voter
 Percent_Voted = (Num_of_voted_voters*100)/Num_all_voters        #68.49% Voters Voted
 ```
 
-## EDA 
+```{r PRINTING counites selected for analysis}
+county_df = data.frame(rbind(c("BERTIE","CALDWELL","FRANKLIN","DARE"),
+                             c("HARNETT","JONES", "CHATHAM", "SWAIN"),
+                             c("PAMLICO","BUNCOMBE","MCDOWELL","MCDOWELL"),
+                             c("STOKES","PITT","NASH","SURRY"),
+                             c("WARREN","TYRRELL","LENOIR","CUMBERLAND")))
+colnames(county_df) = c('County (1-5)','County(6-10)','County (10-15)','County (15-20)')
 
-```{r PLOTTING no of Observations for 20 Counties}
+knitr::kable(
+  county_df[,], 
+  format = 'markdown',
+  booktabs = T,
+  title = 'List of Counties selected'
+)
 
-dt = aggregate(voting_stats_dataset$county_desc, list(voting_stats_dataset$county_desc), length)
-colnames(dt) = c('County','NbrOfObs')
-
-ggplot(dt,aes(x=County, y=NbrOfObs),label=NbrOfObs)+
-  geom_bar(stat='identity',fill='Blue2', width = 0.4)+
-  ylim(0,15500)+
-  geom_text(aes(label= scales::comma(NbrOfObs)),hjust=0.5,vjust=-0.8,size=3)+
-  ggtitle("Number of Observations for 20 Counties") +
-  theme( plot.title = element_text(hjust = 0.5),
-        axis.text.x = element_text(angle = 45,hjust = 1))
 ```
 
+```{r Number ob observations for a Party}
+# table(voting_stats_dataset$party_cd)
+```
+```{r Observations for LIB Party county wise}
+voting_stats_dataset$county_desc = as.character(voting_stats_dataset$county_desc)
+voting_stats_dataset$county_desc = factor(voting_stats_dataset$county_desc)
+#table(voting_stats_dataset$county_desc, voting_stats_dataset$party_cd)
+```
 ```{r Observations where Party has changed}
 #Checking number observations where party has changed
-nrow(voting_dataset[voting_dataset$party_cd != voting_dataset$voted_party_cd,]) #868 (0.8%)
+#nrow(voting_dataset[voting_dataset$party_cd != voting_dataset$voted_party_cd,]) #868 (0.8%)
 
 # Since only 0.8% observations have different partycd and voted_party_cd. 
 # Dropping voted_party_cd column
@@ -259,7 +305,19 @@ nrow(voting_dataset[voting_dataset$party_cd != voting_dataset$voted_party_cd,]) 
 voting_dataset$voted_party_cd <- NULL
 ```
 
-```{r PLOTTING County wise voter turnout}
+## Data Analysis :
+```{r PLOTTING #Observations for 20 Counties, include=FALSE}
+
+dt = aggregate(voting_stats_dataset$county_desc, list(voting_stats_dataset$county_desc), length)
+colnames(dt) = c('County','NbrOfObs')
+ggplot(dt,aes(x=County, y=NbrOfObs),label=NbrOfObs)+
+  geom_bar(stat='identity',fill='Blue2', width = 0.4)+
+  geom_text(aes(label= scales::comma(NbrOfObs)),hjust=0.5,vjust=-0.8,size=3)+
+  ggtitle("Number of Observations for 20 Counties") +
+  theme( plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45,hjust = 1))
+```
+```{r PLOTTING County wise voter turnout, include=FALSE}
 
 dt = aggregate(c(voting_stats_dataset$total_voters), list(voting_stats_dataset$county_desc), sum)
 colnames(dt) = c('County','NbrOfTotalVoters')
@@ -267,21 +325,6 @@ dt2 = aggregate(c(voting_stats_dataset$voted_voters), list(voting_stats_dataset$
 colnames(dt2) = c('County','NbrOfVotedVoters')
 dt3 = merge(dt, dt2, by = "County")
 dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
-
-## Plotting number of total voters and count of voters who voted
-
-# ggplot(dt3, aes(x=County))+
-#   geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
-#   geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.4)+
-#   ggtitle("Distribution of Total Voter and Voted voters for 20 Counties") +
-#   geom_text(data=dt3,aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
-#             vjust = 0.6, hjust= -0.2, angle=90, size=2.5 ) +
-#   ylim(0,200000)+
-#   xlab("Counties")+
-#   ylab("Voter Count") +
-#   theme(legend.position = "none",
-#         plot.title = element_text(hjust = 0.5),
-#         axis.text.x = element_text(angle = 45,hjust = 1))
 
 ggplot(dt3, aes(x=County))+
   geom_bar(aes(y=percentVoted*100, fill=County), stat = 'identity', width = 0.4)+
@@ -296,8 +339,40 @@ ggplot(dt3, aes(x=County))+
         axis.text.x = element_text(angle = 45,hjust = 1))
 ```
 
-```{r PLOTTING Gender wise voter turnout}
+Initial analysis of data using visualization provides several keys insights about the variation of voter turnout among and within the counties. It also highlighted several relationships among gender, race, party, and counties. Following are the key observations from the analysis :
 
+* Although **average voter turnout** for every **county** was in the **similar** range of ~70%, **distribution** of voter turnout within the counties didn't appear to be that similar. 
+
+```{r PLOTTING Distribution of County wise voter turnout, fig.align='center',fig.height=3, fig.width= 5}
+
+dt = aggregate(c(voting_stats_dataset$total_voters), 
+               list(voting_stats_dataset$county_desc,voting_stats_dataset$precinct_abbrv ), sum)
+colnames(dt) = c('County','precinct_abbrv','NbrOfTotalVoters')
+dt2 = aggregate(c(voting_stats_dataset$voted_voters), 
+                list(voting_stats_dataset$county_desc, voting_stats_dataset$precinct_abbrv), sum)
+colnames(dt2) = c('County','precinct_abbrv','NbrOfVotedVoters')
+dt3 = merge(dt, dt2, by = c("County", 'precinct_abbrv'))
+dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2)*100)
+dt3$precinct_abbrv.y <- NULL
+
+ggplot(dt3, aes(x=County))+
+  geom_boxplot(aes(y=percentVoted, fill=County), width = 0.4)+
+  ggtitle("Distribution of Voter Turnout for 20 Counties") +
+  ylim(35,95)+
+  xlab("Counties")+
+  ylab("Voter Turnout") +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5, size=8),
+        axis.text.x = element_text(angle = 45,hjust = 1, size = 4 ),
+        axis.title = element_text(size=8))
+```
+
+* **Female** voters had **3%** more turnout as compared to male counterparts. 
+* **Republican** and **Libertarian** voters had the highest turnout, 5% more as compared to Democrats.
+* Only **half** of the registered voters **aged between 18-40** showed up for voting.      
+.                               
+                           
+```{r PLOTTING Gender wise voter turnout (1) }
 dt = aggregate(c(voting_stats_dataset$total_voters), 
                list(voting_stats_dataset$sex_code), sum)
 colnames(dt) = c('sex_code','NbrOfTotalVoters')
@@ -309,20 +384,166 @@ dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
 
 ## Plotting number of total voters and count of voters who voted
 
-ggplot(dt3, aes(x=sex_code))+
+genwise =ggplot(dt3, aes(x=sex_code))+
   geom_bar(aes(y=percentVoted*100, fill=sex_code), stat = 'identity',  width = 0.3)+
   ggtitle("Gender-wise Voter Turnout") +
   geom_text(data=dt3,aes(y=percentVoted*100,label=scales::percent(percentVoted)), 
-            vjust = -0.4, hjust= 0.4, angle=0, size=4 ) +
+            vjust = -0.5, hjust= 0.4, angle=0, size=2 ) +
   ylim(0,100)+
   xlab("Gender")+
-  ylab("Voter Count") +
+  ylab("Voter Turnout") +
   theme(legend.position = "none",
-        plot.title = element_text(hjust = 0.5),
-        axis.text.x = element_text(angle = 45,hjust = 1))
+        plot.title = element_text(hjust = 0.5, size = 8),
+        axis.text.x = element_text(angle = 0,hjust = 1, size = 5),
+        axis.title = element_text(size=8))
+```
+```{r PLOTTING Party wise voter turnout (2)}
+
+dt = aggregate(c(voting_stats_dataset$total_voters), 
+               list(voting_stats_dataset$party_cd), sum)
+colnames(dt) = c('party_cd','NbrOfTotalVoters')
+dt2 = aggregate(c(voting_stats_dataset$voted_voters), 
+                list(voting_stats_dataset$party_cd), sum)
+colnames(dt2) = c('party_cd','NbrOfVotedVoters')
+dt3 = merge(dt, dt2, by = "party_cd")
+dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
+
+## Plotting number of total voters and count of voters who voted
+
+partywise = ggplot(dt3, aes(x=party_cd))+
+  geom_bar(aes(y=percentVoted*100, fill=party_cd), stat = 'identity',  width = 0.3)+
+  ggtitle("Party-wise Voter Turnout") +
+  geom_text(data=dt3,aes(y=percentVoted*100,label=scales::percent(percentVoted)), 
+            vjust = -0.5, hjust= 0.4, angle=0, size=2 ) +
+  ylim(0,100)+
+  xlab("Party")+
+  ylab("Voter Turout") +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5, size = 8),
+        axis.text.x = element_text(angle = 0,hjust = 1, size = 5),
+        axis.title = element_text(size=8))
+```
+```{r PLOTTING Age wise voter turnout (3)}
+
+dt = aggregate(c(voting_stats_dataset$total_voters), 
+               list(voting_stats_dataset$age), sum)
+colnames(dt) = c('age','NbrOfTotalVoters')
+dt2 = aggregate(c(voting_stats_dataset$voted_voters), 
+                list(voting_stats_dataset$age), sum)
+colnames(dt2) = c('age','NbrOfVotedVoters')
+dt3 = merge(dt, dt2, by = "age")
+dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
+
+## Plotting number of total voters and count of voters who voted
+
+agewise = ggplot(dt3, aes(x=age))+
+  geom_bar(aes(y=percentVoted*100, fill=age), stat = 'identity',  width = 0.3)+
+  ggtitle("Age-wise Voter Turnout") +
+  geom_text(data=dt3,aes(y=percentVoted*100,label=scales::percent(percentVoted)), 
+            vjust = -0.5, hjust= 0.4, angle=0, size=2 ) +
+  ylim(0,100)+
+  xlab("Age Group")+
+  ylab("Voter Turnout") +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5, size = 8),
+        axis.text.x = element_text(angle = 45,hjust = 1,size = 5 ),
+        axis.title = element_text(size=8))
+```
+```{r PLOTTING (1) (2) and (3), fig.align='center', fig.height=2 , fig.width= 6}
+ggarrange(genwise, partywise, agewise,ncol = 3)
 ```
 
-```{r PLOTTING Gender and County wise voter turnout}
+* **Female Democrats** had **8%** more turnout than the male democrats
+* **Black-Female** had **13%** more turnout than their male counterparts.
+
+```{r PLOTTING Gender and Party wise voter turnout (4), fig.align='center',fig.height=2, fig.width= 5}
+dt = aggregate(c(voting_stats_dataset$total_voters), 
+               list(voting_stats_dataset$party_cd,voting_stats_dataset$sex_code), sum)
+colnames(dt) = c('party_cd',"Sex_code",'NbrOfTotalVoters')
+dt2 = aggregate(c(voting_stats_dataset$voted_voters), 
+                list(voting_stats_dataset$party_cd,voting_stats_dataset$sex_code), sum)
+colnames(dt2) = c('party_cd',"Sex_code", "NbrOfVotedVoters")
+dt3 = merge(dt, dt2, by = c("party_cd","Sex_code"))
+dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
+
+genpart = ggplot(dt3, aes(x=party_cd))+ 
+  geom_bar(aes(y=percentVoted*100,fill=party_cd), stat = 'identity', width = 0.4)+
+  ggtitle("Party-wise Voter Turnout for Gender") +
+  geom_text(data=dt3,
+            aes(y=percentVoted*100,label=scales::percent(percentVoted)), 
+            hjust = 0.5, vjust = -0.5, angle=0, size=2) +
+  ylim(0,101)+
+  xlab("Party Code")+
+  ylab("Voter Turnout") +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5,size=8),
+        axis.text.x = element_text(angle = 0,hjust = 1,size=4),
+        axis.title = element_text(size=8),
+        strip.text = element_text(size=6)) + facet_wrap(~Sex_code)
+
+```
+```{r PLOTTING Gender and Race wise voter turnout (5),  fig.align='center',fig.height=2, fig.width= 5}
+dt = aggregate(c(voting_stats_dataset$total_voters), 
+               list(voting_stats_dataset$race,voting_stats_dataset$sex_code), sum)
+colnames(dt) = c('race',"Sex_code",'NbrOfTotalVoters')
+dt2 = aggregate(c(voting_stats_dataset$voted_voters), 
+                list(voting_stats_dataset$race,voting_stats_dataset$sex_code), sum)
+colnames(dt2) = c('race',"Sex_code", "NbrOfVotedVoters")
+dt3 = merge(dt, dt2, by = c("race","Sex_code"))
+dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
+
+genRac = ggplot(dt3, aes(x=race))+ 
+  geom_bar(aes(y=percentVoted*100, fill=race), stat = 'identity', width = 0.4)+
+  ggtitle("Race wise Voter-Turnout for Genders") +
+  geom_text(data=dt3,
+            aes(y=percentVoted*100,label=scales::percent(percentVoted)), 
+            hjust = 0.5, vjust = -0.5, angle=0, size=1.5) +
+  xlab("Race")+
+  ylab("Voter Turnout") +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5, size=8),
+        axis.text.x = element_text(angle = 0,hjust = 1,size=4),
+        axis.title  = element_text(size=8),
+        strip.text = element_text(size=6)) + facet_wrap(~Sex_code)
+
+```
+```{r PLOTTING (4) and (5), fig.align='center', fig.height=3 , fig.width= 10}
+ggarrange(genpart,genRac, ncol = 2)
+```
+
+\newpage
+
+* Interestingly several counties had **100%** voter turnout for **Libertarian** party which is much higher than the overall average turnout of ~ 70%.   
+
+```{r PLOTTING Party and County (IMP), fig.align='center', fig.height=4, fig.width=12 }
+
+dt = aggregate(c(voting_stats_dataset$total_voters), 
+               list(voting_stats_dataset$party_cd,voting_stats_dataset$county_desc), sum)
+colnames(dt) = c('party_cd',"county_desc",'NbrOfTotalVoters')
+dt2 = aggregate(c(voting_stats_dataset$voted_voters), 
+                list(voting_stats_dataset$party_cd,voting_stats_dataset$county_desc), sum)
+colnames(dt2) = c('party_cd',"county_desc", "NbrOfVotedVoters")
+dt3 = merge(dt, dt2, by = c("party_cd","county_desc"))
+dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
+
+ggplot(dt3, aes(x=party_cd))+ 
+  geom_bar(aes(y=percentVoted*100,fill=party_cd), stat = 'identity', width = 0.4)+
+  ggtitle("Party-wise Voter-Turnout for County") +
+  geom_text(data=dt3,
+            aes(y=percentVoted*100,label=scales::percent(percentVoted)), 
+            hjust = 0.5, vjust = -0.5, angle=0, size=2) +
+  ylim(0,115)+
+  xlab("Party Code")+
+  ylab("Voter Turnout") +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5,size =10),
+        axis.text.x = element_text(angle = 45,hjust = 1),
+        axis.title = element_text(size=10),
+        strip.text = element_text(size=8)) + facet_wrap(~county_desc, ncol = 10, nrow = 2)
+
+```
+
+```{r PLOTTING Gender and County wise voter turnout, include=FALSE}
 dt = aggregate(c(voting_stats_dataset$total_voters), 
                list(voting_stats_dataset$county_desc,voting_stats_dataset$sex_code), sum)
 colnames(dt) = c('County',"Sex_code",'NbrOfTotalVoters')
@@ -331,40 +552,6 @@ dt2 = aggregate(c(voting_stats_dataset$voted_voters),
 colnames(dt2) = c('County',"Sex_code", "NbrOfVotedVoters")
 dt3 = merge(dt, dt2, by.x = c("County","Sex_code"), by.y=c("County","Sex_code"))
 dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
-
-## plotting number of total voters and count of voters who voted 
-
-## County Wise
-
-# ggplot(dt3, aes(x=County))+
-#   geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2')+
-#   geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2')+
-#   ggtitle("County-wise Voter Turnout") +
-#   geom_text(data=dt3,aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
-#             hjust = -0.1, vjust = 0.5, angle=90, size=3) +
-#   ylim(0,105000)+
-#   xlab("Counties")+
-#   ylab("Voter Count") +
-#   theme(legend.position = "none",
-#         plot.title = element_text(hjust = 0.5),
-#         axis.text.x = element_text(angle = 45,hjust = 1))+
-#   facet_wrap(~Sex_code)
-# 
-# ## Gender Wise 
-# 
-# ggplot(dt3, aes(x=Sex_code))+
-#   geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.6)+
-#   geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.4)+
-#   ggtitle("Gender-wise voter Turnout") +
-#   geom_text(data=dt3,aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
-#             hjust = 0.5, vjust = -0.5, angle=0, size=3) +
-#   ylim(0,105000)+
-#   xlab("Counties")+
-#   ylab("Voter Count") +
-#   theme(legend.position = "none",
-#         plot.title = element_text(hjust = 0.5),
-#         axis.text.x = element_text(angle = 45,hjust = 1))+
-#   facet_wrap(~County)
 
 ggplot(dt3, aes(x=County))+
   geom_bar(aes(y=percentVoted*100, fill=County), stat = 'identity')+
@@ -382,63 +569,20 @@ ggplot(dt3, aes(x=County))+
 ### Based on the analysis, it seems for each county, the number of males and females who voted
 ### were comparable (+- 2%)
 ```
-
-```{r PLOTTING Gender and Party wise voter turnout}
+```{r PLOTTING Race and Party wise voter turnout (4), include=FALSE}
 dt = aggregate(c(voting_stats_dataset$total_voters), 
-               list(voting_stats_dataset$party_cd,voting_stats_dataset$sex_code), sum)
-colnames(dt) = c('party_cd',"Sex_code",'NbrOfTotalVoters')
+               list(voting_stats_dataset$party_cd,voting_stats_dataset$race_code), sum)
+colnames(dt) = c('party_cd',"race_code",'NbrOfTotalVoters')
 dt2 = aggregate(c(voting_stats_dataset$voted_voters), 
-                list(voting_stats_dataset$party_cd,voting_stats_dataset$sex_code), sum)
-colnames(dt2) = c('party_cd',"Sex_code", "NbrOfVotedVoters")
-dt3 = merge(dt, dt2, by = c("party_cd","Sex_code"))
+                list(voting_stats_dataset$party_cd,voting_stats_dataset$race_code), sum)
+colnames(dt2) = c('party_cd',"race_code", "NbrOfVotedVoters")
+dt3 = merge(dt, dt2, by = c("party_cd","race_code"))
 dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
 
-## Plotting
 
-# female_party_plot <- ggplot(dt3[dt3$Sex_code=="F",], aes(x=party_cd))+ 
-#   geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
-#   geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.2)+
-#   ggtitle("Party-wise Voter-Turnout (Female)") +
-#   geom_text(data=dt3[dt3$Sex_code=="F",],
-#             aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
-#             hjust = 0.5, vjust = -0.5, angle=0, size=3) +
-#   xlab("Party Code")+
-#   ylab("Female Voters") +
-#   theme(legend.position = "none",
-#         plot.title = element_text(hjust = 0.5),
-#         axis.text.x = element_text(angle = 45,hjust = 1))
-# 
-# male_party_plot <- ggplot(dt3[dt3$Sex_code=="M",], aes(x=party_cd))+ 
-#   geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
-#   geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.2)+
-#   ggtitle("Party-wise Voter-Turnout (Male)") +
-#   geom_text(data=dt3[dt3$Sex_code=="M",],
-#             aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
-#             hjust = 0.5, vjust = -0.5, angle=0, size=3) +
-#   xlab("Party Code")+
-#   ylab("Male Voters") +
-#   theme(legend.position = "none",
-#         plot.title = element_text(hjust = 0.5),
-#         axis.text.x = element_text(angle = 45,hjust = 1))
-# 
-# U_party_plot <- ggplot(dt3[dt3$Sex_code=="U",], aes(x=party_cd))+ 
-#   geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
-#   geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.2)+
-#   ggtitle("Party-wise Voter-Turnout (U)") +
-#   geom_text(data=dt3[dt3$Sex_code=="U",],
-#             aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
-#             hjust = 0.5, vjust = -0.5, angle=0, size=3) +
-#   xlab("Party Code")+
-#   ylab("U Voters") +
-#   theme(legend.position = "none",
-#         plot.title = element_text(hjust = 0.5),
-#         axis.text.x = element_text(angle = 45,hjust = 1))
-# 
-# ggarrange(male_party_plot,female_party_plot,U_party_plot, ncol = 3)
-
-ggplot(dt3, aes(x=party_cd))+ 
+raceparty = ggplot(dt3, aes(x=party_cd))+ 
   geom_bar(aes(y=percentVoted*100,fill=party_cd), stat = 'identity', width = 0.4)+
-  ggtitle("Party-wise Voter-Turnout for Gender") +
+  ggtitle("Party-wise Voter-Turnout for Races") +
   geom_text(data=dt3,
             aes(y=percentVoted*100,label=scales::percent(percentVoted)), 
             hjust = 0.5, vjust = -0.5, angle=0, size=3.5) +
@@ -447,25 +591,10 @@ ggplot(dt3, aes(x=party_cd))+
   ylab("Voter Turnout") +
   theme(legend.position = "none",
         plot.title = element_text(hjust = 0.5),
-        axis.text.x = element_text(angle = 45,hjust = 1)) + facet_wrap(~Sex_code)
-
-# ggplot(dt3, aes(x=Sex_code))+ 
-#   geom_bar(aes(y=percentVoted*100,fill=Sex_code), stat = 'identity', width = 0.4)+
-#   ggtitle("Gender-wise Voter-Turnout for Parties") +
-#   geom_text(data=dt3,
-#             aes(y=percentVoted*100,label=scales::percent(percentVoted)), 
-#             hjust = 0.5, vjust = -0.5, angle=0, size=3) +
-#   ylim(0,110)+
-#   xlab("Gender Code")+
-#   ylab("Voter Trunout") +
-#   theme(legend.position = "none",
-#         plot.title = element_text(hjust = 0.5),
-#         axis.text.x = element_text(angle = 45,hjust = 1)) + facet_wrap(~party_cd)
+        axis.text.x = element_text(angle = 45,hjust = 1)) + facet_wrap(~race_code)
 
 ```
-
-```{r PLOTTING Gender and Age wise voter turnout}
-
+```{r PLOTTING Gender and Age wise voter turnout , include=FALSE}
 dt = aggregate(c(voting_stats_dataset$total_voters), 
                list(voting_stats_dataset$age,voting_stats_dataset$sex_code), sum)
 colnames(dt) = c('age',"Sex_code",'NbrOfTotalVoters')
@@ -474,61 +603,6 @@ dt2 = aggregate(c(voting_stats_dataset$voted_voters),
 colnames(dt2) = c('age',"Sex_code", "NbrOfVotedVoters")
 dt3 = merge(dt, dt2, by = c("age","Sex_code"))
 dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
-
-
-# female_age_plot <- ggplot(dt3[dt3$Sex_code=="F",], aes(x=age))+ 
-#   geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
-#   geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.2)+
-#   ggtitle("Age wise Voter-Turnout (Female)") +
-#   geom_text(data=dt3[dt3$Sex_code=="F",],
-#             aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
-#             hjust = 0.5, vjust = -0.5, angle=0, size=3) +
-#   xlab("Age Groups")+
-#   ylab("Female Voters") +
-#   theme(legend.position = "none",
-#         plot.title = element_text(hjust = 0.5),
-#         axis.text.x = element_text(angle = 45,hjust = 1))
-# 
-# male_age_plot <- ggplot(dt3[dt3$Sex_code=="M",], aes(x=age))+ 
-#   geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
-#   geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.2)+
-#   ggtitle("Age wise Voter-Turnout (Male)") +
-#   geom_text(data=dt3[dt3$Sex_code=="M",],
-#             aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
-#             hjust = 0.5, vjust = -0.5, angle=0, size=3) +
-#   xlab("Age Groups")+
-#   ylab("Male Voters") +
-#   theme(legend.position = "none",
-#         plot.title = element_text(hjust = 0.5),
-#         axis.text.x = element_text(angle = 45,hjust = 1))
-# 
-# u_age_plot <- ggplot(dt3[dt3$Sex_code=="U",], aes(x=age))+ 
-#   geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
-#   geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.2)+
-#   ggtitle("Age wise Voter-Turnout (U)") +
-#   geom_text(data=dt3[dt3$Sex_code=="U",],
-#             aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
-#             hjust = 0.5, vjust = -0.5, angle=0, size=3) +
-#   xlab("Age Groups")+
-#   ylab("U Voters") +
-#   theme(legend.position = "none",
-#         plot.title = element_text(hjust = 0.5),
-#         axis.text.x = element_text(angle = 45,hjust = 1))
-# 
-# ggarrange(female_age_plot,male_age_plot,u_age_plot, ncol = 3)
-
-# ggplot(dt3, aes(x=Sex_code))+ 
-#   geom_bar(aes(y=percentVoted*100), stat = 'identity',fill='blue3', width = 0.4)+
-#   ggtitle("Age wise Voter-Turnout for Gender") +
-#   geom_text(data=dt3,
-#             aes(y=percentVoted*100,label=scales::percent(percentVoted)), 
-#             hjust = 0.4, vjust = -0.5, angle=0, size=4) +
-#   ylim(0,100)+
-#   xlab("Gender")+
-#   ylab("Voters") +
-#   theme(legend.position = "none",
-#         plot.title = element_text(hjust = 0.5),
-#         axis.text.x = element_text(angle = 45,hjust = 1))+facet_wrap(~age)
 
 ggplot(dt3, aes(x=age))+ 
   geom_bar(aes(y=percentVoted*100,fill=age), stat = 'identity', width = 0.4)+
@@ -543,75 +617,30 @@ ggplot(dt3, aes(x=age))+
         plot.title = element_text(hjust = 0.5),
         axis.text.x = element_text(angle = 45,hjust = 1))+facet_wrap(~Sex_code)
 ```
-
-```{r PLOTTING Gender and Race wise voter turnout}
+```{r PLOTTING Party and Age wise voter turnout , include=FALSE}
 dt = aggregate(c(voting_stats_dataset$total_voters), 
-               list(voting_stats_dataset$race,voting_stats_dataset$sex_code), sum)
-colnames(dt) = c('race',"Sex_code",'NbrOfTotalVoters')
+               list(voting_stats_dataset$age,voting_stats_dataset$party_cd), sum)
+colnames(dt) = c('age',"party_cd",'NbrOfTotalVoters')
 dt2 = aggregate(c(voting_stats_dataset$voted_voters), 
-                list(voting_stats_dataset$race,voting_stats_dataset$sex_code), sum)
-colnames(dt2) = c('race',"Sex_code", "NbrOfVotedVoters")
-dt3 = merge(dt, dt2, by = c("race","Sex_code"))
+                list(voting_stats_dataset$age,voting_stats_dataset$party_cd), sum)
+colnames(dt2) = c('age',"party_cd", "NbrOfVotedVoters")
+dt3 = merge(dt, dt2, by = c("age","party_cd"))
 dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
 
-# 
-# female_race_plot <- ggplot(dt3[dt3$Sex_code=="F",], aes(x=race))+ 
-#   geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
-#   geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.2)+
-#   ggtitle("Race wise Voter-Turnout (Female)") +
-#   geom_text(data=dt3[dt3$Sex_code=="F",],
-#             aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
-#             hjust = 0.5, vjust = -0.5, angle=0, size=3) +
-#   xlab("Race")+
-#   ylab("Female Voters") +
-#   theme(legend.position = "none",
-#         plot.title = element_text(hjust = 0.5),
-#         axis.text.x = element_text(angle = 45,hjust = 1))
-# 
-# male_race_plot <- ggplot(dt3[dt3$Sex_code=="M",], aes(x=race))+ 
-#   geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
-#   geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.2)+
-#   ggtitle("Race wise Voter-Turnout (Male)") +
-#   geom_text(data=dt3[dt3$Sex_code=="M",],
-#             aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
-#             hjust = 0.5, vjust = -0.5, angle=0, size=3) +
-#   xlab("Race")+
-#   ylab("Male Voters") +
-#   theme(legend.position = "none",
-#         plot.title = element_text(hjust = 0.5),
-#         axis.text.x = element_text(angle = 45,hjust = 1))
-# 
-# U_race_plot <- ggplot(dt3[dt3$Sex_code=="U",], aes(x=race))+ 
-#   geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
-#   geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.2)+
-#   ggtitle("Race wise Voter-Turnout (U)") +
-#   geom_text(data=dt3[dt3$Sex_code=="U",],
-#             aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
-#             hjust = 0.5, vjust = -0.5, angle=0, size=3) +
-#   xlab("Race")+
-#   ylab("U Voters") +
-#   theme(legend.position = "none",
-#         plot.title = element_text(hjust = 0.5),
-#         axis.text.x = element_text(angle = 45,hjust = 1))
-# 
-# 
-# ggarrange(female_race_plot,male_race_plot,U_race_plot, ncol = 3)
-
-ggplot(dt3, aes(x=race))+ 
-  geom_bar(aes(y=percentVoted*100, fill=race), stat = 'identity', width = 0.4)+
-  ggtitle("Race wise Voter-Turnout for Genders") +
+ggplot(dt3, aes(x=age))+ 
+  geom_bar(aes(y=percentVoted*100,fill=age), stat = 'identity', width = 0.4)+
+  ggtitle("Party wise Voter-Turnout for Age Groups") +
   geom_text(data=dt3,
             aes(y=percentVoted*100,label=scales::percent(percentVoted)), 
-            hjust = 0.5, vjust = -0.5, angle=0, size=3) +
-  xlab("Race")+
+            hjust = 0.4, vjust = -0.5, angle=0, size=3.5) +
+  ylim(0,110)+
+  xlab("Age Groups")+
   ylab("Voter Turnout") +
   theme(legend.position = "none",
         plot.title = element_text(hjust = 0.5),
-        axis.text.x = element_text(angle = 45,hjust = 1)) + facet_wrap(~Sex_code)
-
+        axis.text.x = element_text(angle = 45,hjust = 1))+facet_wrap(~party_cd)
 ```
-
-```{r PLOTTING Gender and Ethnicity wise voter turnout}
+```{r PLOTTING Gender and Ethnicity wise voter turnout , include=FALSE}
 dt = aggregate(c(voting_stats_dataset$total_voters), 
                list(voting_stats_dataset$ethnic_code,voting_stats_dataset$sex_code), sum)
 colnames(dt) = c('ethnic_code',"Sex_code",'NbrOfTotalVoters')
@@ -620,47 +649,6 @@ dt2 = aggregate(c(voting_stats_dataset$voted_voters),
 colnames(dt2) = c('ethnic_code',"Sex_code", "NbrOfVotedVoters")
 dt3 = merge(dt, dt2, by = c("ethnic_code","Sex_code"))
 dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
-
-# female_ethnic_plot <- ggplot(dt3[dt3$Sex_code=="F",], aes(x=ethnic_code))+ 
-#   geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
-#   geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.2)+
-#   ggtitle("Ethnic-code wise Voter-Turnout (Female)") +
-#   geom_text(data=dt3[dt3$Sex_code=="F",],
-#             aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
-#             hjust = 0.5, vjust = -0.5, angle=0, size=3) +
-#   xlab("Ethnic-code")+
-#   ylab("Female Voters") +
-#   theme(legend.position = "none",
-#         plot.title = element_text(hjust = 0.5),
-#         axis.text.x = element_text(angle = 45,hjust = 1))
-# 
-# male_ethnic_plot <- ggplot(dt3[dt3$Sex_code=="M",], aes(x=ethnic_code))+ 
-#   geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
-#   geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.2)+
-#   ggtitle("Ethnic-code wise Voter-Turnout (Male)") +
-#   geom_text(data=dt3[dt3$Sex_code=="M",],
-#             aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
-#             hjust = 0.5, vjust = -0.5, angle=0, size=3) +
-#   xlab("Ethnic-code")+
-#   ylab("Male Voters") +
-#   theme(legend.position = "none",
-#         plot.title = element_text(hjust = 0.5),
-#         axis.text.x = element_text(angle = 45,hjust = 1))
-# 
-# U_ethnic_plot <- ggplot(dt3[dt3$Sex_code=="U",], aes(x=ethnic_code))+ 
-#   geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
-#   geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.2)+
-#   ggtitle("Ethnic-code wise Voter-Turnout (U)") +
-#   geom_text(data=dt3[dt3$Sex_code=="U",],
-#             aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
-#             hjust = 0.5, vjust = -0.5, angle=0, size=3) +
-#   xlab("Ethnic-code")+
-#   ylab("U Voters") +
-#   theme(legend.position = "none",
-#         plot.title = element_text(hjust = 0.5),
-#         axis.text.x = element_text(angle = 45,hjust = 1))
-# 
-# ggarrange(female_ethnic_plot,male_ethnic_plot,U_ethnic_plot, ncol = 3)
 
 ggplot(dt3, aes(x=ethnic_code))+ 
   geom_bar(aes(y=percentVoted*100, fill=ethnic_code), stat = 'identity', width = 0.4)+
@@ -675,8 +663,7 @@ ggplot(dt3, aes(x=ethnic_code))+
         axis.text.x = element_text(angle = 45,hjust = 1))+ facet_wrap(~Sex_code)
 
 ```
-
-```{r PLOTTING Ethnicity and Age wise voter turnout}
+```{r PLOTTING Ethnicity and Age wise voter turnout, include=FALSE}
 dt = aggregate(c(voting_stats_dataset$total_voters), 
                list(voting_stats_dataset$ethnic_code,voting_stats_dataset$age), sum)
 colnames(dt) = c('ethnic_code',"age",'NbrOfTotalVoters')
@@ -685,37 +672,6 @@ dt2 = aggregate(c(voting_stats_dataset$voted_voters),
 colnames(dt2) = c('ethnic_code',"age", "NbrOfVotedVoters")
 dt3 = merge(dt, dt2, by = c("ethnic_code","age"))
 dt3 = mutate(dt3, percentVoted = round((NbrOfVotedVoters/NbrOfTotalVoters),2))
-
-
-# agewise_ethnic_plot <- ggplot(dt3, aes(x=age))+ 
-#   geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
-#   geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.2)+
-#   ggtitle("Age-wise Voter-Turnout for Ethnic groups") +
-#   geom_text(data=dt3,
-#             aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
-#             hjust = 0.5, vjust = -0.5, angle=0, size=3) +
-#   xlab("Age")+
-#   ylab("Voters") +
-#   theme(legend.position = "none",
-#         plot.title = element_text(hjust = 0.5, size=10),
-#         axis.text.x = element_text(angle = 45,hjust = 1))+
-#   facet_wrap(~ethnic_code)
-# 
-# ethnicwise_age_plot <- ggplot(dt3, aes(x=ethnic_code))+ 
-#   geom_bar(aes(y=NbrOfTotalVoters), stat = 'identity', fill='Blue2', width = 0.4)+
-#   geom_bar(aes(y=NbrOfVotedVoters), stat = 'identity', fill='Orange2', width = 0.2)+
-#   ggtitle("Ethnicity-wise Voter-Turnout for Age groups") +
-#   geom_text(data=dt3,
-#             aes(y=NbrOfTotalVoters,label=scales::percent(percentVoted)), 
-#             hjust = 0.5, vjust = -0.5, angle=0, size=3) +
-#   xlab("Ehnic Code")+
-#   ylab("Voters") +
-#   theme(legend.position = "none",
-#         plot.title = element_text(hjust = 0.5, size=10),
-#         axis.text.x = element_text(angle = 45,hjust = 1))+
-#   facet_wrap(~age)
-# 
-# ggarrange(agewise_ethnic_plot,ethnicwise_age_plot, ncol = 2)
 
 ggplot(dt3, aes(x=age))+ 
   geom_bar(aes(y=percentVoted*100, fill=age), stat = 'identity', width = 0.4)+
@@ -732,7 +688,6 @@ ggplot(dt3, aes(x=age))+
 
 ```
 
-## Data Processing
 
 ```{r Removing Precints and Aggregating}
 
@@ -753,13 +708,11 @@ colnames(Votes_Dataset) <- c("county_desc","party_cd", "age", "race_code", "ethn
 #rm(all_voter)
 #rm(voted_voter)
 ```
-
 ```{r Voter Turnout after aggregating }
 Num_all_voters <- sum(Votes_Dataset$total_voters)        #947,012 (Total voters)
 Num_of_voted_voters <- sum(Votes_Dataset$voted_voters)   #648,649 (Voters who voted)
 Percent_Voted = (Num_of_voted_voters*100)/Num_all_voters #68.5 %
 ```
-
 ```{r Data Processing }
 
 #dim(Votes_Dataset) # 7291 (rows) 
@@ -772,79 +725,119 @@ Votes_Dataset = mutate(Votes_Dataset, total_voters = ifelse(voted_voters>total_v
 #Checking rows were voted voters are more than total voters after updating
 #nrow(Votes_Dataset[Votes_Dataset$voted_voters > Votes_Dataset$total_voters,  ]) # 0
 ```
-
 ```{r Voter Turnout after processing}
 Num_all_voters <- sum(Votes_Dataset$total_voters)        #947,083 (Total voters)
 Num_of_voted_voters <- sum(Votes_Dataset$voted_voters)   #648,649 (Voters who voted)
 Percent_Voted = (Num_of_voted_voters*100)/Num_all_voters #68.48 %
 ```
-
 ```{r Chi-square test}
 chi_age_party = chisq.test(Votes_Dataset$age,Votes_Dataset$party_cd) #significant / association exists
 chi_sex_party = chisq.test(Votes_Dataset$sex_code,Votes_Dataset$party_cd) # boderline p / association exists
 ```
 
-##Dataset - Votes_Dataset
 
-## Modeling
+# MODEL 
+
+Post the initial analysis, to quantify the effects of the demographic variables, a logistic regression model was used. In addition, as discussed earlier, although all the counties had similar average voter turnout in the range of ~70 %, inter-county distributions were different. To capture this in-county variance in voter turnout, along with the information of overall voter turnout, a **multi-level** hierarchical model (random intercept for counties in this case) was used to quantify the demographic effects. 
+
+A series of modeling attempts, using *county* as a random intercept and rest of demographics as fixed effects along with few interactions between gender, age, party, and the race was made and tested using ANOVA. However, since voter turnout is primarily a function of the demographics, each model highlighted high significance towards all the fixed demographic variables. Moreover, with the increment of a number of interactions, effects were getting distributed and hence diminished among interactions. 
+
+Finally, a model (with lowest AIC and variation) using all the demographic features (age, gender, race, ethnicity, and party affiliations) along with an interaction between gender and party affiliations were selected.    
+
+\[{log}(\dfrac{\hat\pi_i}{1-\hat\pi_i}) = \hat\beta_0 + \gamma^{County}_{0j[i]} + \hat\beta_{g}G_i + \hat\beta_{r}R_i + \hat\beta_{E}E_i + \hat\beta_{P}P_i + 
+\hat\beta_{A}A_i + \sum_{k=2}^{K}\hat\beta_{6}G_{ik}:P_{i}\] 
+
+Where: 
+**G** = *Gender*, **R** = *Race Code*, **E** = *Ethnicity code*, **P** = *Party Code*, **A** = *Age group*
+
 
 ```{r Model_1 Simple Logistic Regression}
 
-Model_1 <- glm(cbind(voted_voters,total_voters-voted_voters) ~ county_desc + party_cd + 
-               age + race_code + ethnic_code + sex_code, 
-               data = Votes_Dataset, family = binomial)
+# Model_1 <- glm(cbind(voted_voters,total_voters-voted_voters) ~ county_desc + party_cd + 
+#                age + race_code + ethnic_code + sex_code, 
+#                data = Votes_Dataset, family = binomial)
+# 
+# summary(Model_1)
 
-summary(Model_1)
+# 95.3 % Accuracy (In-sample)
 ```
 
 ```{r Model_2 Hierarchical Modelling with Random Intercept as County}
-Model_2 <- glmer(cbind(voted_voters,total_voters-voted_voters)  ~ (1|county_desc) +
-                party_cd + age + race_code + ethnic_code + sex_code,
-                 data = Votes_Dataset, family = binomial)
-
-summary(Model_2)
+# Model_2 <- glmer(cbind(voted_voters,total_voters-voted_voters)  ~ (1|county_desc) +
+#                 party_cd + age + race_code + ethnic_code + sex_code,
+#                  data = Votes_Dataset, family = binomial)
+# 
+# summary(Model_2)
+#
+# 95.3 Accuracy (In-sample)
 ```
 
-```{r Model_3 Random Intercept as County and slope as Gender}
-Model_3 <- glmer(cbind(voted_voters,total_voters-voted_voters) ~  (1|county_desc) + 
-                party_cd + age + race_code + ethnic_code + sex_code +sex_code:party_cd,
-                 data = Votes_Dataset, family = binomial)
-
-summary(Model_3)
+```{r Model_3 Random Intercept as County}
+# Model_3 <- glmer(cbind(voted_voters,total_voters-voted_voters) ~  (1|county_desc) + 
+#                 party_cd + age + race_code + ethnic_code + sex_code +sex_code:party_cd,
+#                  data = Votes_Dataset, family = binomial)
+# 
+# summary(Model_3)
 #dotplot(ranef(Model_3), conVar=T)
 ```
 
 ```{r ANOVA Model_2 and Model_3}
-anova(Model_2, Model_3) #Model_3 is better
+# anova(Model_2, Model_3) #Model_3 is better
 ```
 
-
 ```{r Model_4}
-Model_4 <- glmer(cbind(voted_voters,total_voters-voted_voters)  ~ (1|county_desc)+
-                 (1|party_cd)+ age + race_code + ethnic_code + sex_code + sex_code:party_cd,
-                 data = Votes_Dataset, family = binomial)
-
-summary(Model_4)
+# Model_4 <- glmer(cbind(voted_voters,total_voters-voted_voters)  ~ (1|county_desc)+
+#                  (1|party_cd)+ age + race_code + ethnic_code + sex_code + sex_code:party_cd,
+#                  data = Votes_Dataset, family = binomial)
+# 
+# summary(Model_4)
 #ranef(Model_4)
 #dotplot(ranef(Model_4), conVar=T)
 ```
 
-
 ```{r Model_5}
 Model_5 <- glmer(cbind(voted_voters,total_voters-voted_voters)  ~ (1|county_desc) + 
-                 sex_code + party_cd + age + race_code + ethnic_code + sex_code:party_cd,
-                 data = Votes_Dataset, family = binomial)
+                 sex_code + party_cd + age + race_code + ethnic_code + party_cd:sex_code,
+                 data = Votes_Dataset, family = binomial(link="logit"))
 
-summary(Model_5)
-
-ranef(Model_5)
+#summary(Model_5)
 ```
 
 ```{r ANOVA Model_2 and Model_5}
-anova(Model_2, Model_5) #Model_3 is better
+#anova(Model_2, Model_5) #Model_3 is better
 ```
 
-```{r Decomposing  Votes_dataset }
+```{r Model_6 Not better}
+# model_bayes =  brm(mvbind(voted_voters,total_voters-voted_voters)  ~ (1|county_desc) + 
+#                  sex_code + party_cd + age + race_code + ethnic_code + sex_code:party_cd,
+#                  data = Votes_Dataset, family = binomial(link="logit"),
+#                   control = list(adapt_delta = 0.995))
+
+#table(Votes_Dataset[]$party_cd,Votes_Dataset$voted_voters )
+```
+
+# RESULT  
+
+Quantifying the demographics effects provided several key insights : 
+
+* The base odds of turnout is **1.09**. **Chatham** county had the highest baseline odds of turnout at **1.54**, while **Swain** and **Cherokee** had the lowest baseline odds of turnout at **0.5**
+    
+**Given control of other potential predictors**, **INCREASE** in Odds of Turnout being a :
+
+* **Female** voters (1.14) is **13%** more the **Male** voters (1.01).
+* **Libertarians** was surprisingly high, which could be explained by the very high voter turnout for the Libertarian party in several counties, as discussed during the analysis.
+* **Republican** voters (3.82) is **117%** more than the **Democrats** voters (2.05).
+* Voter in **age groups above 40 years** is nearly **150%** more than the lower age groups.
+* **Hispanic or Latino** voter is nearly **30%** more than **Non-Hispanic or Latino** voters.      
+
+Controlling all other potential variables and varying only the gender and party, the prediction was made to quantify the effects of gender w.r.t to party. Below were the observations:  
+
+* Odds of Voter turnout being a **Female Democrats** exceeded **Male Democrats** by a factor of **0.65**.
+* However, Odds of Voter turnout being a **Female Republic** exceeded **Male Democrats** by only a factor of **0.05**.
+* Moreover, Odds of Voter turnout being a **Male Republic** exceeded **Male Democrats** by a factor **0.93**.
+* Moreover, Odds of Voter turnout being a **Female Republic** exceeded **Female Democrats** by a factor **0.35**.   
+
+```{r Decomposing Votes_dataset }
 
 decomp_votes <- rep(0,0)
 for (i in seq(1,dim(Votes_Dataset[, c("total_voters", "voted_voters")])[1])) {
@@ -856,9 +849,7 @@ for (i in seq(1,dim(Votes_Dataset[, c("total_voters", "voted_voters")])[1])) {
  decomp_votes <- list.append(decomp_votes, row_result)
 }
 ```
-
-
-```{r Predicting Model_5}
+```{r Predicting Model_5 and Creating Confusion Matrix}
 predicted = predict(Model_5, Votes_Dataset, type= "response")
 
 pred_votes <- rep(0,0)
@@ -870,27 +861,94 @@ for (i in seq(1,length(predicted))) {
   pred_row_result <- list.append(ones,zeros)
   pred_votes <- list.append(pred_votes, pred_row_result)
 }
-str(decomp_votes)
-str(pred_votes)
+# str(decomp_votes)
+# str(pred_votes)
 
-confusionMatrix(factor(decomp_votes),factor(pred_votes))
+confmax = confusionMatrix(factor(decomp_votes,labels = c("Voted","Not Voted")),
+                          factor(pred_votes, labels = c("Voted","Not Voted"))) #95.6% Accuracy
+
+# knitr::kable(
+#   confmax$table[,], 
+#   format = 'markdown',
+#   booktabs = T
+# )
+
+```
+```{r DOTPLOT for model5, fig.align='center', out.width='50%', warning=FALSE, warning=FALSE, results='hide' }
+dotplot(ranef(Model_5), conVar =T)
+
+Intercepts = data.frame(cbind
+                         (c("Intercept", "Female", "Male", "Democrats", "Libertarians", "Republican"),
+                          c(1.09, 1.14, 1.01, 2.05, 25.59, 3.82),
+                         c( "Age 26-40", "Age 41-65", "Age over 66", "Asian", "Black or AA", "AI or AN"), 
+                          c(1.16, 2.55, 2.85, 1.44, 0.73, 0.99),
+                         c(">2 Races", "Other Race", "White", "Hispanic or Latino", "Non Hispanic or Latino", ""), 
+                          c(1.91, 0.69, 0.76, 1.36, 1.07,''),
+                         c("F Dem", "M Dem", "F Lib", "M Lib", "F Rep", "M Rep")),
+                           c(0.64,0.54, 0.08, 0.08, 0.39, 0.43))
+
+
+colnames(Intercepts) = c('Beta','Exp Val','Beta.','Exp Val.','Beta..','Exp Val..','Beta...','Exp Val...')
+```
+```{r TABLE for Intercepts,warning=FALSE, warning=FALSE}
+knitr::kable(
+  Intercepts[,], 
+  format = 'markdown',
+  booktabs = T
+)
 ```
 
-```{r Model_6}
-Model_6 <- glmer(cbind(voted_voters,total_voters-voted_voters)  ~ (1|county_desc) + 
-                 sex_code + party_cd + age + race_code + ethnic_code + sex_code:party_cd+
-                 age:party_cd,
-                 data = Votes_Dataset, family = binomial)
+The above table contains the exponentiated estimates for the variables.    
 
-summary(Model_6)
+* The Model generated an **in-sample of accuracy** of **95%**.
+* Based on the dot-plot highlighting the 95% confidence interval for the random effects of counties, a multi-level (random intercept) model seemed a good fit.   
 
-ranef(Model_6)
+```{r PLOTTING random intercept for Counties Model5, include=FALSE}
+# df_mod = ranef(Model_5)[[1]]
+# df_mod = cbind(df_mod,rownames(df_mod))
+# colnames(df_mod) = c('Intercept', 'County')
+# ggplot(df_mod,aes(x=County, y=Intercept))+
+#   geom_point()+
+#   geom_line(method='lm')+
+#   theme(legend.position = "none",
+#         plot.title = element_text(hjust = 0.5, size=10),
+#         axis.text.x = element_text(angle = 45,hjust = 1))
+
 ```
 
+```{r Quantifying the efffects of interaction terms}
+genpart_df = data.frame(rbind(c("CHATHAM","REP","Age 18 - 25","B","HL","M"),
+                              c("CHATHAM","DEM","Age 18 - 25","B","HL","M")))
+colnames(genpart_df) = c("county_desc","party_cd","age","race_code","ethnic_code","sex_code")
 
-### Analyzing Results
+pred_genpart_df = predict(Model_5, genpart_df )
 
-## Results
+#DEM Male - 0.6394016     1.89
+#DEM Female - 0.9364978   2.55
+
+#REP Male - 1.04
+#REP Female - 1.06
+
+#LIB Male - 1.29
+#LIB Female - 1.35
+
+#REP Male - 1.04
+#DEM Male - 0.64
+
+#REP Female - 1.066
+#DEM Female - 0.936
+
+```
+
+# CONCLUSION
+
+The analysis provided several important highlights about the demographics features such as County, Gender, age, race, and ethnicity, which seemed to affect voter turnout in the state of NC, among other variables. Quantifying the effect of these features using a multi-level logistic regression model provided an idea of the extent of effects of the demographics on the voter turnout. 
+However, given more information about the polling stations and election campaigns along with the demographics, it could have assisted in better analysis. Moreover, since all the features were categorical, the model was highly susceptible to overfitting, and due to the absence of test data, testing model performance could not be done. Also, the interpretation of the model to quantify the effects of interactions could not be carried out directly. Prediction using controlled data was performed to quantify these effects. 
+To summarize, an extensive analysis needs to done using more demographic features in the data, as mentioned earlier, and a better modeling algorithm to analyze and model the effects leading to voter turnout. 
+
+*************
+
+
 
 
 
