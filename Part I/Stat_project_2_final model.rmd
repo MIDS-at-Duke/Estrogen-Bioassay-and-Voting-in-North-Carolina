@@ -151,6 +151,8 @@ qqnorm(residuals(full_estrogen_model));qqline(residuals(full_estrogen_model))
 
 ```
 
+
+
 ##### Model Selection Process
 
 From EDA, we found that there are only 3 different doses for ZM and around 9 different doses for EE. We were thinking about making EE and ZM as categorical variables, but the problem of making them into categorical variable would result in loss of information since 1 mg is not just different from 10 mg, it is 1/10 of 10 milligrams. 
@@ -178,7 +180,6 @@ plot(full_estrogen_model)
 ```
 
 There was another approach we tried which is adding the group as an extra predictor variable in the model and this issue will be fixed. However, when we added the group variable, we are losing information on EE and ZM and the interpretation would not make sense to say different groups of rats can have different impacts. We also checked the issue of multicollinearity, the VIF for each predictors in our final model are all between 2.6 to 5.6. This is the best model we have considering all the questions needed to be answered. The AIC score for this model is 3228 and BIC is 3310. 
-
 
 
 
