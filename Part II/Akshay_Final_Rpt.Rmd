@@ -833,7 +833,7 @@ Quantifying the demographics effects provided several key insights :
 Controlling all other potential variables and varying only the gender and party, the prediction was made to quantify the effects of gender w.r.t to party. Below were the observations:  
 
 * Odds of Voter turnout being a **Female Democrats** exceeded **Male Democrats** by a factor of **0.65**.
-* However, Odds of Voter turnout being a **Female Republic** exceeded **Male Democrats** by only a factor of **0.05**.
+* However, Odds of Voter turnout being a **Female Republic** exceeded **Male Republic** by only a factor of **0.05**.
 * Moreover, Odds of Voter turnout being a **Male Republic** exceeded **Male Democrats** by a factor **0.93**.
 * Moreover, Odds of Voter turnout being a **Female Republic** exceeded **Female Democrats** by a factor **0.35**.   
 
